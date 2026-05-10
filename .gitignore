@@ -1,0 +1,41 @@
+# Environments and Secrets
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Data and Persistent Storage
+data/
+chroma_data/
+*.jsonl
+*.json
+*.csv
+
+# Docker
+.dockerignore
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store

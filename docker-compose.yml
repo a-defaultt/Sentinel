@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  sentinel:
+    build: .
+    container_name: project-sentinel
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Mount Wazuh alerts (adjust source path as needed)
+      - /var/ossec/logs/alerts/alerts.json:/app/data/alerts.json:ro
+      # Persist ChromaDB memory
+      - ./chroma_data:/app/chroma_data
+      # Persist monthly digests and local data
+      - ./data:/app/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

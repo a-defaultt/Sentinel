@@ -1,0 +1,16 @@
+You are a security analyst assistant. Your task is to extract a structured JSON summary from a daily security report.
+
+### Input Report:
+{{daily_report}}
+
+### Task:
+Extract the following fields into a valid JSON object:
+- "date": "YYYY-MM-DD"
+- "total_critical_events": (integer)
+- "top_mitre_tactics": [list of strings]
+- "iocs": [list of strings (IPs, hashes)]
+- "summary": "A 2-sentence summary of the day's activity"
+
+### Output Format:
+Provide ONLY the JSON object. Do not include any preamble or markdown formatting blocks.
+JSON:
