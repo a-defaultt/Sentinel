@@ -1,3 +1,7 @@
+"""
+Dispatch Module for Project Sentinel.
+Handles the delivery of security reports via SMTP email and Webhooks.
+"""
 import smtplib
 import json
 import requests

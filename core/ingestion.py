@@ -1,3 +1,7 @@
+"""
+Ingestion Module for Project Sentinel.
+Handles reading, filtering, and aggregating Wazuh alerts from JSONL files.
+"""
 import json
 import pandas as pd
 import logging

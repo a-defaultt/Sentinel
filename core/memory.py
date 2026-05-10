@@ -1,3 +1,7 @@
+"""
+Memory Module for Project Sentinel.
+Manages persistent vector storage using ChromaDB for RAG-based threat analysis.
+"""
 import chromadb
 from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 import pandas as pd

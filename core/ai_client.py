@@ -1,3 +1,7 @@
+"""
+AI Client Module for Project Sentinel.
+Provides a unified interface for the NVIDIA Build API, including generation, embedding, and reranking.
+"""
 import time
 import logging
 from typing import List, Dict, Any, Optional

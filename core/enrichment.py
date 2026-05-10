@@ -1,3 +1,7 @@
+"""
+Enrichment Module for Project Sentinel.
+Integrates with AbuseIPDB and VirusTotal to provide threat intelligence for IOCs.
+"""
 import time
 import requests
 import logging

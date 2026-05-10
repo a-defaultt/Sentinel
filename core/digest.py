@@ -1,3 +1,7 @@
+"""
+Digest Module for Project Sentinel.
+Performs AI-driven extraction of daily summaries for the monthly reporting cycle.
+"""
 import json
 import os
 import logging

@@ -1,3 +1,7 @@
+"""
+Main Orchestrator for Project Sentinel.
+Sets up the scheduler and manages the execution of daily and monthly SOC pipelines.
+"""
 import os
 import time
 import schedule

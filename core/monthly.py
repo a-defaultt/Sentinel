@@ -1,3 +1,7 @@
+"""
+Monthly Reporting Module for Project Sentinel.
+Synthesizes daily digests into a comprehensive monthly threat landscape report.
+"""
 import json
 import os
 import shutil
