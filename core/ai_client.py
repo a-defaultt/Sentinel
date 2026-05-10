@@ -8,7 +8,10 @@ from typing import List, Dict, Any, Optional
 from openai import OpenAI
 import requests
 from config import (
-    NVIDIA_API_KEY, 
+    NVIDIA_PRIMARY_KEY,
+    NVIDIA_FALLBACK_KEY,
+    NVIDIA_EMBEDDING_KEY,
+    NVIDIA_RERANKING_KEY,
     NVIDIA_BASE_URL, 
     PRIMARY_MODEL, 
     FALLBACK_MODEL, 
@@ -21,20 +24,18 @@ from config import (
 
 class NVIDIAClient:
     def __init__(self):
-        self.client = OpenAI(
-            base_url=NVIDIA_BASE_URL,
-            api_key=NVIDIA_API_KEY
-        )
-        self.headers = {
-            "Authorization": f"Bearer {NVIDIA_API_KEY}",
-            "Accept": "application/json"
-        }
+        # We'll initialize clients as needed since they have different keys
+        self.base_url = NVIDIA_BASE_URL
+
+    def _get_client(self, api_key: str):
+        return OpenAI(base_url=self.base_url, api_key=api_key)
 
     def generate_text(self, system_prompt: str, user_prompt: str) -> str:
         """Generates text using the primary model with a fallback mechanism."""
         try:
             logger.info(f"Generating text with primary model: {PRIMARY_MODEL}")
-            response = self.client.chat.completions.create(
+            client = self._get_client(NVIDIA_PRIMARY_KEY)
+            response = client.chat.completions.create(
                 model=PRIMARY_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -48,7 +49,8 @@ class NVIDIAClient:
         except Exception as e:
             logger.warning(f"Primary model ({PRIMARY_MODEL}) failed: {e}. Attempting fallback...")
             try:
-                response = self.client.chat.completions.create(
+                client = self._get_client(NVIDIA_FALLBACK_KEY)
+                response = client.chat.completions.create(
                     model=FALLBACK_MODEL,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -67,9 +69,8 @@ class NVIDIAClient:
         """Generates embeddings for a list of texts."""
         try:
             logger.info(f"Generating embeddings for {len(texts)} chunks")
-            # NVIDIA Embedding API might have specific requirements
-            # Using OpenAI compatible endpoint
-            response = self.client.embeddings.create(
+            client = self._get_client(NVIDIA_EMBEDDING_KEY)
+            response = client.embeddings.create(
                 input=texts,
                 model=EMBEDDING_MODEL,
                 encoding_format="float"
@@ -84,9 +85,12 @@ class NVIDIAClient:
         if not documents:
             return []
             
-        url = f"{NVIDIA_BASE_URL}/reranking/nvidia/rerank-qa-mistral-4b" # Adjusted URL for reranker
-        # Note: NVIDIA Rerank API might have a specific structure. 
-        # Checking spec: rerank-qa-mistral-4b
+        url = f"{self.base_url}/reranking/nvidia/rerank-qa-mistral-4b"
+        
+        headers = {
+            "Authorization": f"Bearer {NVIDIA_RERANKING_KEY}",
+            "Accept": "application/json"
+        }
         
         payload = {
             "model": RERANKER_MODEL,
@@ -97,12 +101,10 @@ class NVIDIAClient:
 
         try:
             logger.info(f"Reranking {len(documents)} documents for query")
-            # Rerank API might not be OpenAI compatible, using requests
-            response = requests.post(url, headers=self.headers, json=payload, timeout=NVIDIA_TIMEOUT)
+            response = requests.post(url, headers=headers, json=payload, timeout=NVIDIA_TIMEOUT)
             response.raise_for_status()
             results = response.json().get('results', [])
             
-            # Return indices of top results
             return [item['index'] for item in results]
         except Exception as e:
             logger.error(f"Reranking failed: {e}. Returning first {top_n} results as fallback.")

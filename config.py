@@ -21,13 +21,16 @@ DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 CHROMA_DATA_PATH = Path(os.getenv("CHROMA_DATA_PATH", "/app/chroma_data"))
 
 # API Keys
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+NVIDIA_PRIMARY_KEY = os.getenv("NVIDIA_PRIMARY_KEY")
+NVIDIA_FALLBACK_KEY = os.getenv("NVIDIA_FALLBACK_KEY")
+NVIDIA_EMBEDDING_KEY = os.getenv("NVIDIA_EMBEDDING_KEY")
+NVIDIA_RERANKING_KEY = os.getenv("NVIDIA_RERANKING_KEY")
 VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
 ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY")
 
 # Check for mandatory API keys
-if not NVIDIA_API_KEY:
-    logger.error("NVIDIA_API_KEY is missing from environment variables.")
+if not all([NVIDIA_PRIMARY_KEY, NVIDIA_FALLBACK_KEY, NVIDIA_EMBEDDING_KEY, NVIDIA_RERANKING_KEY]):
+    logger.error("One or more NVIDIA API Keys are missing (Primary, Fallback, Embedding, or Reranking).")
 if not VIRUSTOTAL_API_KEY:
     logger.warning("VIRUSTOTAL_API_KEY is missing; IOC enrichment will be limited.")
 if not ABUSEIPDB_API_KEY:
