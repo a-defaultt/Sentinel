@@ -138,10 +138,7 @@ class MonthlyReporter:
 
             # Step 5: Dispatch
             subject = f"Project Sentinel Monthly Threat Landscape - {datetime.now().strftime('%Y-%m')}"
-            import markdown
-            html_report = markdown.markdown(full_report)
-            
-            self.dispatcher.send_email(subject, html_report)
+            self.dispatcher.send_email(subject, full_report)
             self.dispatcher.send_webhook(briefing)
 
             # Archive

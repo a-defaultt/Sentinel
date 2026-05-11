@@ -52,7 +52,7 @@ class SentinelMemory:
         return flattened
 
     def store_alerts(self, df: pd.DataFrame):
-        """Stores aggregated alerts in ChromaDB."""
+        """Stores aggregated alerts in ChromaDB using upsert to avoid duplicates."""
         if df.empty:
             return
 
@@ -61,16 +61,9 @@ class SentinelMemory:
         ids = []
 
         for _, row in df.iterrows():
-            # Create a descriptive text for embedding
-            # Truncate according to spec: drop port, dstuser etc if >512 tokens
-            # We'll build a string with priority fields
             alert_dict = row.to_dict()
-            
-            # Remove enrichment fields from metadata but keep for document if needed
-            # Enrichment fields are often dicts
             clean_metadata = {k: v for k, v in alert_dict.items() if not k.startswith('enrichment_')}
             
-            # Add enrichment data in a flattened way
             if 'enrichment_ip' in alert_dict and isinstance(alert_dict['enrichment_ip'], dict):
                 for k, v in alert_dict['enrichment_ip'].items():
                     clean_metadata[f"ip_{k}"] = v
@@ -79,25 +72,28 @@ class SentinelMemory:
                 for k, v in alert_dict['enrichment_hash'].items():
                     clean_metadata[f"hash_{k}"] = v
 
-            # Construct document string
+            # Construct more detailed document string for better RAG
             doc_str = f"Alert {row.get('rule_id')} - {row.get('description')}. "
-            doc_str += f"Source IP: {row.get('srcip')}. Agent: {row.get('agent_name')}. "
+            doc_str += f"Groups: {row.get('rule_groups')}. "
+            doc_str += f"Source IP: {row.get('srcip')}. Agent: {row.get('agent_name')} ({row.get('agent_id')}). "
+            doc_str += f"Location: {row.get('location')}. "
             if row.get('mitre_ids'):
                 doc_str += f"MITRE: {row.get('mitre_ids')}. "
             if row.get('cve'):
                 doc_str += f"CVE: {row.get('cve')}. "
             
-            # Truncate
             doc_str = self._truncate_text(doc_str)
             
             documents.append(doc_str)
             metadatas.append(self._flatten_metadata(clean_metadata))
-            # Use timestamp and rule_id and srcip for a unique ID
-            ids.append(f"{row.get('timestamp')}_{row.get('rule_id')}_{row.get('srcip')}")
+            
+            # Robust unique ID: date + rule_id + srcip + agent_id
+            unique_id = f"{row.get('timestamp')[:10]}_{row.get('rule_id')}_{row.get('srcip')}_{row.get('agent_id')}"
+            ids.append(unique_id)
 
         if documents:
-            logger.info(f"Storing {len(documents)} alerts in ChromaDB")
-            self.collection.add(
+            logger.info(f"Upserting {len(documents)} alerts in ChromaDB")
+            self.collection.upsert(
                 documents=documents,
                 metadatas=metadatas,
                 ids=ids

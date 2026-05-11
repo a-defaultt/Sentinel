@@ -95,8 +95,8 @@ class NVIDIAClient:
         if not documents:
             return []
             
-        # NVIDIA Rerank endpoint is usually /ranking
-        url = f"{self.base_url}/ranking"
+        # Updated NVIDIA Rerank endpoint and structure
+        url = f"{self.base_url}/retrieval/nvidia/reranking"
         
         headers = {
             "Authorization": f"Bearer {NVIDIA_RERANKING_KEY}",
@@ -107,17 +107,20 @@ class NVIDIAClient:
         payload = {
             "model": RERANKER_MODEL,
             "query": {"text": query},
-            "documents": [{"text": doc} for doc in documents],
-            "top_n": top_n
+            "passages": [{"text": doc} for doc in documents],
+            "truncate": "END"
         }
 
         try:
             logger.info(f"Reranking {len(documents)} documents for query")
             response = requests.post(url, headers=headers, json=payload, timeout=NVIDIA_TIMEOUT)
             response.raise_for_status()
-            results = response.json().get('results', [])
+            results = response.json().get('rankings', []) # NVIDIA typically returns 'rankings'
             
-            return [item['index'] for item in results]
+            # Extract top indices
+            # Format: [{"index": 0, "logit": ...}, ...]
+            top_results = sorted(results, key=lambda x: x.get('logit', 0), reverse=True)[:top_n]
+            return [item['index'] for item in top_results]
         except Exception as e:
             logger.error(f"Reranking failed: {e}. Returning first {top_n} results as fallback.")
             return list(range(min(len(documents), top_n)))

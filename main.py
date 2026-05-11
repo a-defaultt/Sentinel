@@ -62,16 +62,22 @@ class ProjectSentinel:
             logger.info("PHASE 4: AI Report Generation")
             template_path = os.path.join(os.path.dirname(__file__), 'templates', 'prompt_system.txt')
             with open(template_path, 'r') as f:
-                system_prompt = f.read()
+                system_prompt_template = f.read()
 
-            today_json = df.to_json(orient='records', indent=2)
+            # Separate core alert data from enrichment data for the prompt
+            enrichment_cols = [c for c in df.columns if c.startswith('enrichment_')]
+            alerts_only_df = df.drop(columns=enrichment_cols)
+            enrichment_only_df = df[['srcip', 'hashes'] + enrichment_cols]
+
+            today_json = alerts_only_df.to_json(orient='records', indent=2)
+            enrichment_json = enrichment_only_df.to_json(orient='records', indent=2)
             hist_context_str = "\n---\n".join(historical_contexts) if historical_contexts else "No relevant historical context found."
 
-            user_prompt = f"Today's Date: {datetime.now().strftime('%Y-%m-%d')}\n"
-            user_prompt = system_prompt.replace('{{today_alerts}}', today_json)
+            user_prompt = system_prompt_template.replace('{{today_alerts}}', today_json)
+            user_prompt = user_prompt.replace('{{enrichment_data}}', enrichment_json)
             user_prompt = user_prompt.replace('{{historical_context}}', hist_context_str)
 
-            full_report = self.ai_client.generate_text("You are a Senior SOC Analyst.", user_prompt)
+            full_report = self.ai_client.generate_text("You are a Lead SOC Architect.", user_prompt)
 
             # Extract briefing
             briefing = "Briefing extraction failed."
@@ -91,11 +97,7 @@ class ProjectSentinel:
             ]
             
             subject = f"Project Sentinel Daily Report - {datetime.now().strftime('%Y-%m-%d')}"
-            # Convert markdown to HTML for email (simplified for now, can use markdown library)
-            import markdown
-            html_report = markdown.markdown(full_report)
-            
-            self.dispatcher.send_email(subject, html_report, attachments)
+            self.dispatcher.send_email(subject, full_report, attachments)
             self.dispatcher.send_webhook(briefing)
 
             end_time = datetime.now()
