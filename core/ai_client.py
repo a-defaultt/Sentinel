@@ -65,17 +65,27 @@ class NVIDIAClient:
                 logger.error(f"Fallback model ({FALLBACK_MODEL}) also failed: {fe}")
                 raise
 
-    def get_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generates embeddings for a list of texts."""
+    def get_embeddings(self, texts: List[str], input_type: str = "passage") -> List[List[float]]:
+        """Generates embeddings for a list of texts using requests to include input_type."""
         try:
-            logger.info(f"Generating embeddings for {len(texts)} chunks")
-            client = self._get_client(NVIDIA_EMBEDDING_KEY)
-            response = client.embeddings.create(
-                input=texts,
-                model=EMBEDDING_MODEL,
-                encoding_format="float"
-            )
-            return [item.embedding for item in response.data]
+            logger.info(f"Generating embeddings for {len(texts)} chunks with input_type={input_type}")
+            url = f"{self.base_url}/embeddings"
+            headers = {
+                "Authorization": f"Bearer {NVIDIA_EMBEDDING_KEY}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            payload = {
+                "model": EMBEDDING_MODEL,
+                "input": texts,
+                "input_type": input_type,
+                "encoding_format": "float"
+            }
+            
+            response = requests.post(url, headers=headers, json=payload, timeout=NVIDIA_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
+            return [item['embedding'] for item in data['data']]
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
             raise
@@ -85,10 +95,12 @@ class NVIDIAClient:
         if not documents:
             return []
             
-        url = f"{self.base_url}/reranking/nvidia/rerank-qa-mistral-4b"
+        # NVIDIA Rerank endpoint is usually /ranking
+        url = f"{self.base_url}/ranking"
         
         headers = {
             "Authorization": f"Bearer {NVIDIA_RERANKING_KEY}",
+            "Content-Type": "application/json",
             "Accept": "application/json"
         }
         

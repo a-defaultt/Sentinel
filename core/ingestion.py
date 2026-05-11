@@ -17,7 +17,7 @@ class WazuhIngestor:
         alerts = []
         try:
             logger.info(f"Reading alerts from {self.file_path}")
-            with open(self.file_path, 'r') as f:
+            with open(self.file_path, 'r', encoding='utf-8', errors='replace') as f:
                 for line in f:
                     try:
                         alerts.append(json.loads(line))

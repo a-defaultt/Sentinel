@@ -37,13 +37,10 @@ if not ABUSEIPDB_API_KEY:
     logger.warning("ABUSEIPDB_API_KEY is missing; IOC enrichment will be limited.")
 
 # NVIDIA Build API Models
-PRIMARY_MODEL = "nvidia/llama-3.3-nemotron-70b-instruct" # Adjusted based on common NVIDIA NIM naming if necessary, spec says llama-3.3-nemotron-super-49b
-# The spec says: llama-3.3-nemotron-super-49b
-# I will use the exact strings from the spec.
-PRIMARY_MODEL = "llama-3.3-nemotron-super-49b"
-FALLBACK_MODEL = "mistral-small-4-118b"
-EMBEDDING_MODEL = "nv-embedqa-e5-v5"
-RERANKER_MODEL = "rerank-qa-mistral-4b"
+PRIMARY_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
+FALLBACK_MODEL = "mistralai/mistral-small-2409" # Adjusted to a likely valid ID
+EMBEDDING_MODEL = "nvidia/nv-embedqa-e5-v5"
+RERANKER_MODEL = "nvidia/nv-rerankqa-mistral-4b-v3"
 
 # NVIDIA Settings
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"

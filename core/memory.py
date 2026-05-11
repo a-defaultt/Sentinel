@@ -17,7 +17,9 @@ class NVIDIAEmbeddingFunction(EmbeddingFunction):
         self.ai_client = ai_client
 
     def __call__(self, input: Documents) -> Embeddings:
-        return self.ai_client.get_embeddings(input)
+        # Default to passage for general embedding tasks in ChromaDB
+        # We'll use passage here, but queries might need 'query'
+        return self.ai_client.get_embeddings(input, input_type="passage")
 
 class SentinelMemory:
     def __init__(self, ai_client: NVIDIAClient):
@@ -69,11 +71,11 @@ class SentinelMemory:
             clean_metadata = {k: v for k, v in alert_dict.items() if not k.startswith('enrichment_')}
             
             # Add enrichment data in a flattened way
-            if 'enrichment_ip' in alert_dict and alert_dict['enrichment_ip']:
+            if 'enrichment_ip' in alert_dict and isinstance(alert_dict['enrichment_ip'], dict):
                 for k, v in alert_dict['enrichment_ip'].items():
                     clean_metadata[f"ip_{k}"] = v
             
-            if 'enrichment_hash' in alert_dict and alert_dict['enrichment_hash']:
+            if 'enrichment_hash' in alert_dict and isinstance(alert_dict['enrichment_hash'], dict):
                 for k, v in alert_dict['enrichment_hash'].items():
                     clean_metadata[f"hash_{k}"] = v
 
@@ -106,12 +108,13 @@ class SentinelMemory:
         if not query_texts:
             return []
 
-        # Combine query texts into a single search context if needed, or query each
-        # For simplicity and effectiveness, we query with the primary threat indicators
+        # Manually embed queries with input_type="query" for NVIDIA models
+        query_embeddings = self.ai_client.get_embeddings(query_texts, input_type="query")
+
         all_results = []
-        for query in query_texts:
+        for i, query_emb in enumerate(query_embeddings):
             results = self.collection.query(
-                query_texts=[query],
+                query_embeddings=[query_emb],
                 n_results=n_results
             )
             if results['documents']:
