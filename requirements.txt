@@ -6,3 +6,4 @@ schedule>=1.2
 python-dotenv>=1.0
 tiktoken>=0.7
 markdown>=3.5
+toml>=0.10

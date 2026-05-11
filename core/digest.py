@@ -5,6 +5,7 @@ Performs AI-driven extraction of daily summaries for the monthly reporting cycle
 import json
 import os
 import logging
+import toml
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Set
 from config import MONTHLY_DIGEST_PATH, logger
@@ -14,6 +15,7 @@ class DigestManager:
     def __init__(self, ai_client: NVIDIAClient):
         self.ai_client = ai_client
         self.digest_path = MONTHLY_DIGEST_PATH
+        self.toml_path = self.digest_path.with_suffix('.toml')
 
     def _get_known_iocs(self, days: int = 7) -> Set[str]:
         """Reads previous digests and collects IOCs from the last N days."""
@@ -82,7 +84,12 @@ class DigestManager:
             with open(self.digest_path, 'a') as f:
                 f.write(json.dumps(digest_data) + '\n')
             
-            logger.info("Daily digest successfully appended.")
+            # Append TOML version
+            with open(self.toml_path, 'a') as f:
+                f.write(f"# Date: {digest_data.get('date')}\n")
+                f.write(toml.dumps(digest_data) + '\n\n')
+            
+            logger.info("Daily digest successfully appended (JSON & TOML).")
             return digest_data
             
         except Exception as e:
