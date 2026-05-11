@@ -18,6 +18,7 @@ logger = logging.getLogger("SentinelConfig")
 # Base Directories
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
+REPORTS_DIR = DATA_DIR / "reports"
 CHROMA_DATA_PATH = Path(os.getenv("CHROMA_DATA_PATH", "/app/chroma_data"))
 
 # API Keys
@@ -72,7 +73,7 @@ VT_REQ_PER_MIN = 4
 ABUSEIPDB_DAILY_LIMIT = 1000
 
 # Validation of critical paths
-for path in [DATA_DIR, CHROMA_DATA_PATH]:
+for path in [DATA_DIR, REPORTS_DIR, CHROMA_DATA_PATH]:
     if not path.exists():
         try:
             path.mkdir(parents=True, exist_ok=True)

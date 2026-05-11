@@ -13,6 +13,7 @@ from typing import List, Dict, Any
 from config import (
     DAILY_REPORT_TIME, 
     MONTHLY_REPORT_TIME, 
+    REPORTS_DIR,
     logger
 )
 from core.ingestion import process_daily_alerts
@@ -78,6 +79,13 @@ class ProjectSentinel:
             user_prompt = user_prompt.replace('{{historical_context}}', hist_context_str)
 
             full_report = self.ai_client.generate_text("You are a Lead SOC Architect.", user_prompt)
+
+            # Phase 5.5: Save Report Locally
+            report_filename = f"report_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.md"
+            report_path = REPORTS_DIR / report_filename
+            with open(report_path, "w") as f:
+                f.write(full_report)
+            logger.info(f"Full report saved locally to {report_path}")
 
             # Extract briefing
             briefing = "Briefing extraction failed."
