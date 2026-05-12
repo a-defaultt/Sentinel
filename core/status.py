@@ -3,8 +3,13 @@ Status Utility for Project Sentinel.
 Provides a quick health check of the Docker container and the last pipeline run timestamp.
 """
 import os
+import sys
 import json
 from pathlib import Path
+
+# Add project root to sys.path so we can import 'config'
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from config import MONTHLY_DIGEST_PATH
 
 def check_status():
