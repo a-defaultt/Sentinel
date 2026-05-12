@@ -102,3 +102,31 @@ To trigger an immediate run for testing, set `RUN_NOW=true` in your `.env` file 
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
+
+## 📊 Monitoring Status
+
+Project Sentinel includes a lightweight utility to monitor container health and the last successful pipeline execution.
+
+### Quick Status Check
+Run the status script directly:
+```bash
+/home/ahmed/Sentinel/venv/bin/python3 /home/ahmed/Sentinel/core/status.py
+```
+
+### Add Shell Alias (Recommended)
+To make status checks instant, add an alias to your `~/.bashrc`:
+1. Open your bash config:
+   ```bash
+   nano ~/.bashrc
+   ```
+2. Add the following line at the end of the file:
+   ```bash
+   alias sentinel-status='/home/ahmed/Sentinel/venv/bin/python3 /home/ahmed/Sentinel/core/status.py'
+   ```
+3. Refresh your shell:
+   ```bash
+   source ~/.bashrc
+   ```
+4. Now, simply type **`sentinel-status`** to monitor your SOC pipeline.
