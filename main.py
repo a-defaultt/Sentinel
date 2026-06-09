@@ -46,7 +46,7 @@ class ProjectSentinel:
                     # Quick enrichment & alert
                     desc = alert.get('rule', {}).get('description', 'No description')
                     level = alert.get('rule', {}).get('level', 0)
-                    briefing = f"🚨 **CRITICAL ALERT DETECTED (Level {level})**\n- **Description:** {desc}\n- **Agent:** {alert.get('agent', {}).get('name')}\n- **Source IP:** {alert.get('data', {}).get('srcip', 'N/A')}"
+                    briefing = f"**CRITICAL ALERT DETECTED (Level {level})**\n- **Description:** {desc}\n- **Agent:** {alert.get('agent', {}).get('name')}\n- **Source IP:** {alert.get('data', {}).get('srcip', 'N/A')}"
                     self.dispatcher.send_webhook(briefing)
                 except Exception as e:
                     logger.error(f"Error in real-time monitor loop: {e}")
@@ -133,16 +133,20 @@ class ProjectSentinel:
 
             # Phase 7: SOAR Action Execution
             logger.info("PHASE 7: SOAR Action Execution")
-            action_tags = re.findall(r'<action (.*?) />', full_report)
+            # More robust regex to catch tags even without a space before the slash, or in tables
+            action_tags = re.findall(r'<action (.*?)[\s/]*>', full_report)
             for tag_content in action_tags:
                 try:
+                    # Clean up tag_content if it ended with a slash or pipe (from tables)
+                    tag_content = tag_content.rstrip(' /|')
                     action_data = dict(re.findall(r'(\w+)="(.*?)"', tag_content))
-                    self.response_manager.execute_action(
-                        action_type=action_data.get('type'),
-                        target=action_data.get('target'),
-                        agent_id=action_data.get('agent'),
-                        reasoning=action_data.get('reasoning', 'AI Recommended')
-                    )
+                    if action_data:
+                        self.response_manager.execute_action(
+                            action_type=action_data.get('type'),
+                            target=action_data.get('target'),
+                            agent_id=action_data.get('agent'),
+                            reasoning=action_data.get('reasoning', 'AI Recommended')
+                        )
                 except Exception as e:
                     logger.error(f"Failed to parse or execute action tag: {tag_content} - {e}")
 

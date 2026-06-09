@@ -4,7 +4,7 @@ Project Sentinel is a fully automated, Dockerized SOC pipeline designed to inges
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 - **Automated Ingestion:** Efficiently parses Wazuh `alerts.json`, filters high-priority events (Level 10+), and aggregates repeated alerts using Pandas.
 - **Threat Intelligence Enrichment:** Automatically enriches IPs and hashes using **AbuseIPDB** and **VirusTotal** APIs with built-in rate limiting.
@@ -18,7 +18,7 @@ Project Sentinel is a fully automated, Dockerized SOC pipeline designed to inges
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```text
 Sentinel/
@@ -38,7 +38,7 @@ Sentinel/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -84,7 +84,7 @@ Sentinel/
 
 ---
 
-## 📅 Schedule & Operation
+## Schedule & Operation
 
 - **Real-Time Alerts:** Runs continuously in the background for critical (Level 12+) events.
 - **Daily Report:** Runs at **08:00 AM** every day.

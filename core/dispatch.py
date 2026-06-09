@@ -74,7 +74,7 @@ class Dispatcher:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>🛡️ Project Sentinel Forensic Report</h1>
+                    <h1>Project Sentinel Forensic Report</h1>
                     <p>Wazuh AI Intelligence Pipeline · Automated Daily Security Audit</p>
                 </div>
                 <div class="content">
