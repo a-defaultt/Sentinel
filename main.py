@@ -133,22 +133,22 @@ class ProjectSentinel:
 
             # Phase 7: SOAR Action Execution
             logger.info("PHASE 7: SOAR Action Execution")
-            # More robust regex to catch tags even without a space before the slash, or in tables
-            action_tags = re.findall(r'<action (.*?)[\s/]*>', full_report)
-            for tag_content in action_tags:
-                try:
-                    # Clean up tag_content if it ended with a slash or pipe (from tables)
-                    tag_content = tag_content.rstrip(' /|')
-                    action_data = dict(re.findall(r'(\w+)="(.*?)"', tag_content))
-                    if action_data:
+            try:
+                # Look for JSON block in markdown
+                json_match = re.search(r'### AUTOMATED ACTIONS JSON\s+```json\s+(.*?)\s+```', full_report, re.DOTALL)
+                if json_match:
+                    actions = json.loads(json_match.group(1))
+                    for action in actions:
                         self.response_manager.execute_action(
-                            action_type=action_data.get('type'),
-                            target=action_data.get('target'),
-                            agent_id=action_data.get('agent'),
-                            reasoning=action_data.get('reasoning', 'AI Recommended')
+                            action_type=action.get('type'),
+                            target=action.get('target'),
+                            agent_id=action.get('agent'),
+                            reasoning=action.get('reasoning', 'AI Recommended')
                         )
-                except Exception as e:
-                    logger.error(f"Failed to parse or execute action tag: {tag_content} - {e}")
+                else:
+                    logger.info("No automated actions JSON block found in report.")
+            except Exception as e:
+                logger.error(f"Failed to parse or execute automated actions JSON: {e}")
 
             end_time = datetime.now()
             logger.info(f"Daily Pipeline Completed Successfully in {end_time - start_time}")

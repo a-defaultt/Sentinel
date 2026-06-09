@@ -7,7 +7,7 @@ import pandas as pd
 import logging
 import gzip
 import os
-from typing import List, Optional
+from typing import List, Optional, Generator
 from config import ALERTS_JSON_PATH, MIN_RULE_LEVEL, logger
 
 class WazuhIngestor:
@@ -20,30 +20,35 @@ class WazuhIngestor:
             return gzip.open(file_path, 'rt', encoding='utf-8', errors='replace')
         return open(file_path, 'r', encoding='utf-8', errors='replace')
 
-    def read_alerts(self) -> pd.DataFrame:
-        """Reads Wazuh alerts from a JSONL or .jsonl.gz file and returns a DataFrame."""
-        alerts = []
+    def read_alerts(self, chunk_size: int = 5000) -> Generator[pd.DataFrame, None, None]:
+        """
+        Reads Wazuh alerts in chunks for memory efficiency.
+        
+        Args:
+            chunk_size (int): Number of lines to process per chunk.
+        """
         if not os.path.exists(self.file_path):
             logger.error(f"Alerts file not found at {self.file_path}")
-            return pd.DataFrame()
+            return
 
         try:
-            logger.info(f"Reading alerts from {self.file_path}")
+            logger.info(f"Reading alerts in chunks from {self.file_path} (size={chunk_size})")
             with self._get_file_handle(self.file_path) as f:
+                chunk = []
                 for line in f:
                     try:
-                        alerts.append(json.loads(line))
+                        chunk.append(json.loads(line))
                     except json.JSONDecodeError:
                         continue
-            
-            if not alerts:
-                logger.info("No alerts found in file.")
-                return pd.DataFrame()
-            
-            return pd.json_normalize(alerts)
+                    
+                    if len(chunk) >= chunk_size:
+                        yield pd.json_normalize(chunk)
+                        chunk = []
+                
+                if chunk:
+                    yield pd.json_normalize(chunk)
         except Exception as e:
             logger.error(f"Unexpected error reading alerts: {e}", exc_info=True)
-            return pd.DataFrame()
 
     def filter_and_extract(self, df: pd.DataFrame) -> pd.DataFrame:
         """Filters alerts by level and extracts required fields."""
@@ -145,18 +150,20 @@ class WazuhIngestor:
         return grouped
 
 def process_daily_alerts() -> pd.DataFrame:
-    """Helper function to run the full ingestion pipeline."""
+    """Helper function to run the full ingestion pipeline across all chunks."""
     ingestor = WazuhIngestor()
-    raw_df = ingestor.read_alerts()
-    if raw_df.empty:
+    all_processed_chunks = []
+    
+    for chunk_df in ingestor.read_alerts():
+        extracted_df = ingestor.filter_and_extract(chunk_df)
+        if not extracted_df.empty:
+            all_processed_chunks.append(extracted_df)
+    
+    if not all_processed_chunks:
         return pd.DataFrame()
     
-    extracted_df = ingestor.filter_and_extract(raw_df)
-    if extracted_df.empty:
-        return pd.DataFrame()
-    
-    aggregated_df = ingestor.aggregate_alerts(extracted_df)
-    return aggregated_df
+    combined_df = pd.concat(all_processed_chunks, ignore_index=True)
+    return ingestor.aggregate_alerts(combined_df)
 
 if __name__ == "__main__":
     # Test run
