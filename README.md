@@ -94,7 +94,7 @@ To trigger an immediate run for testing, set `RUN_NOW=true` in your `.env` file 
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Language:** Python 3.11+
 - **Data:** Pandas, ChromaDB
@@ -104,7 +104,7 @@ To trigger an immediate run for testing, set `RUN_NOW=true` in your `.env` file 
 
 ---
 
-## 🛡️ Security & Best Practices
+## Security & Best Practices
 
 - **API Keys:** Never commit your `.env` file to source control.
 - **Read-Only Access:** The Wazuh alerts file is mounted as read-only to ensure system integrity.
@@ -112,13 +112,13 @@ To trigger an immediate run for testing, set `RUN_NOW=true` in your `.env` file 
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ---
 
-## 📊 Monitoring Status
+## Monitoring Status
 
 Project Sentinel includes a lightweight utility to monitor container health and the last successful pipeline execution.
 
