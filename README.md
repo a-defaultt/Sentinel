@@ -125,7 +125,7 @@ Project Sentinel includes a lightweight utility to monitor container health and 
 ### Quick Status Check
 Run the status script directly:
 ```bash
-/home/ahmed/Sentinel/venv/bin/python3 /home/ahmed/Sentinel/core/status.py
+./venv/bin/python3 core/status.py
 ```
 
 ### Add Shell Alias (Recommended)
@@ -134,9 +134,9 @@ To make status checks instant, add an alias to your `~/.bashrc`:
    ```bash
    nano ~/.bashrc
    ```
-2. Add the following line at the end of the file:
+2. Add the following line at the end of the file (adjust the path to your Project Sentinel directory):
    ```bash
-   alias sentinel-status='/home/ahmed/Sentinel/venv/bin/python3 /home/ahmed/Sentinel/core/status.py'
+   alias sentinel-status='/path/to/Sentinel/venv/bin/python3 /path/to/Sentinel/core/status.py'
    ```
 3. Refresh your shell:
    ```bash

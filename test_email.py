@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 
 # Load .env
-load_dotenv('/home/ahmed/Sentinel/.env')
+load_dotenv()
 
 def test_smtp_connection():
     host = os.getenv("SMTP_HOST")

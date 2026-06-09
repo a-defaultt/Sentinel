@@ -39,5 +39,5 @@ def process_logs(log_dir):
         time.sleep(10)
 
 if __name__ == "__main__":
-    LOGS_DIR = "/home/ahmed/Downloads/Mar"
+    LOGS_DIR = os.getenv("HISTORICAL_LOGS_DIR", "./historical_logs")
     process_logs(LOGS_DIR)
