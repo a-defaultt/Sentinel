@@ -5,6 +5,8 @@ Handles reading, filtering, and aggregating Wazuh alerts from JSONL files.
 import json
 import pandas as pd
 import logging
+import gzip
+import os
 from typing import List, Optional
 from config import ALERTS_JSON_PATH, MIN_RULE_LEVEL, logger
 
@@ -12,28 +14,33 @@ class WazuhIngestor:
     def __init__(self, file_path: str = str(ALERTS_JSON_PATH)):
         self.file_path = file_path
 
+    def _get_file_handle(self, file_path: str):
+        """Returns a file handle, handling .gz compression automatically."""
+        if file_path.endswith('.gz'):
+            return gzip.open(file_path, 'rt', encoding='utf-8', errors='replace')
+        return open(file_path, 'r', encoding='utf-8', errors='replace')
+
     def read_alerts(self) -> pd.DataFrame:
-        """Reads Wazuh alerts from a JSONL file and returns a DataFrame."""
+        """Reads Wazuh alerts from a JSONL or .jsonl.gz file and returns a DataFrame."""
         alerts = []
+        if not os.path.exists(self.file_path):
+            logger.error(f"Alerts file not found at {self.file_path}")
+            return pd.DataFrame()
+
         try:
             logger.info(f"Reading alerts from {self.file_path}")
-            with open(self.file_path, 'r', encoding='utf-8', errors='replace') as f:
+            with self._get_file_handle(self.file_path) as f:
                 for line in f:
                     try:
                         alerts.append(json.loads(line))
-                    except json.JSONDecodeError as e:
-                        logger.warning(f"Failed to decode JSON line: {e}")
+                    except json.JSONDecodeError:
                         continue
             
             if not alerts:
                 logger.info("No alerts found in file.")
                 return pd.DataFrame()
             
-            df = pd.json_normalize(alerts)
-            return df
-        except FileNotFoundError:
-            logger.error(f"Alerts file not found at {self.file_path}")
-            return pd.DataFrame()
+            return pd.json_normalize(alerts)
         except Exception as e:
             logger.error(f"Unexpected error reading alerts: {e}", exc_info=True)
             return pd.DataFrame()
