@@ -7,6 +7,8 @@ import time
 import schedule
 import logging
 import pandas as pd
+import threading
+import re
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -22,6 +24,8 @@ from core.memory import SentinelMemory
 from core.ai_client import NVIDIAClient
 from core.dispatch import Dispatcher
 from core.digest import DigestManager
+from core.monitor import AlertMonitor
+from core.response import WazuhResponseManager
 
 class ProjectSentinel:
     def __init__(self):
@@ -30,6 +34,25 @@ class ProjectSentinel:
         self.memory = SentinelMemory(self.ai_client)
         self.dispatcher = Dispatcher()
         self.digest_manager = DigestManager(self.ai_client)
+        self.monitor = AlertMonitor()
+        self.response_manager = WazuhResponseManager()
+
+    def start_realtime_monitor(self):
+        """Starts the background thread for real-time critical alerting."""
+        def monitor_loop():
+            logger.info("Real-time Monitor Thread Started.")
+            for alert in self.monitor.monitor_critical(min_level=12):
+                try:
+                    # Quick enrichment & alert
+                    desc = alert.get('rule', {}).get('description', 'No description')
+                    level = alert.get('rule', {}).get('level', 0)
+                    briefing = f"🚨 **CRITICAL ALERT DETECTED (Level {level})**\n- **Description:** {desc}\n- **Agent:** {alert.get('agent', {}).get('name')}\n- **Source IP:** {alert.get('data', {}).get('srcip', 'N/A')}"
+                    self.dispatcher.send_webhook(briefing)
+                except Exception as e:
+                    logger.error(f"Error in real-time monitor loop: {e}")
+
+        monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+        monitor_thread.start()
 
     def run_daily_pipeline(self):
         """Executes the full daily SOC pipeline."""
@@ -108,6 +131,21 @@ class ProjectSentinel:
             self.dispatcher.send_email(subject, full_report, attachments)
             self.dispatcher.send_webhook(briefing)
 
+            # Phase 7: SOAR Action Execution
+            logger.info("PHASE 7: SOAR Action Execution")
+            action_tags = re.findall(r'<action (.*?) />', full_report)
+            for tag_content in action_tags:
+                try:
+                    action_data = dict(re.findall(r'(\w+)="(.*?)"', tag_content))
+                    self.response_manager.execute_action(
+                        action_type=action_data.get('type'),
+                        target=action_data.get('target'),
+                        agent_id=action_data.get('agent'),
+                        reasoning=action_data.get('reasoning', 'AI Recommended')
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to parse or execute action tag: {tag_content} - {e}")
+
             end_time = datetime.now()
             logger.info(f"Daily Pipeline Completed Successfully in {end_time - start_time}")
 
@@ -128,6 +166,9 @@ class ProjectSentinel:
 def main():
     sentinel = ProjectSentinel()
     
+    # Start Real-time Monitor
+    sentinel.start_realtime_monitor()
+
     # Schedule jobs
     schedule.every().day.at(DAILY_REPORT_TIME).do(sentinel.run_daily_pipeline)
     schedule.every().day.at(MONTHLY_REPORT_TIME).do(sentinel.run_monthly_pipeline_if_first_day)

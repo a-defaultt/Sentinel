@@ -69,7 +69,11 @@ class WazuhIngestor:
             'data.service': 'service_abused',
             'data.srcport': 'port',
             'data.vulnerability.cve': 'cve',
-            'data.ssh.fingerprint': 'ssh_key_fingerprint'
+            'data.ssh.fingerprint': 'ssh_key_fingerprint',
+            'full_log': 'full_log',
+            'data.parent_id': 'parent_id',
+            'data.process_name': 'process_name',
+            'data.command': 'command'
         }
 
         # Some fields might be in different places depending on the decoder

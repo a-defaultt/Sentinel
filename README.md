@@ -8,11 +8,13 @@ Project Sentinel is a fully automated, Dockerized SOC pipeline designed to inges
 
 - **Automated Ingestion:** Efficiently parses Wazuh `alerts.json`, filters high-priority events (Level 10+), and aggregates repeated alerts using Pandas.
 - **Threat Intelligence Enrichment:** Automatically enriches IPs and hashes using **AbuseIPDB** and **VirusTotal** APIs with built-in rate limiting.
+- **Real-Time Critical Alerting (Hot-Path):** Background monitoring of `alerts.json` for zero-latency detection of Level 12+ alerts with instant Webhook dispatch.
+- **Active Response (SOAR):** Integrated with Wazuh API to execute automated remediation (e.g., blocking IPs) based on AI-driven confidence scores (Confidence >= 8).
+- **Deep Root Cause Analysis (RCA):** Captures full forensic logs and process trees to generate detailed attack chains and entry-point hypotheses.
 - **Historical Vector Memory (RAG):** Uses **ChromaDB** to store and query historical threat data. Features a 2-stage retrieval pipeline with the `nv-embedqa-e5-v5` embedding model and `rerank-qa-mistral-4b` reranker for optimal context.
 - **AI-Driven Reporting:** Leverages **NVIDIA Build API** (`llama-3.3-nemotron-super-49b`) to generate professional daily and monthly security reports.
 - **Multi-Channel Dispatch:** Delivers full HTML reports via **SMTP Email** and high-level executive briefings via **Webhooks**.
 - **Self-Synthesizing Monthly Reports:** Maintains a daily digest log (`monthly_digest.jsonl`) that is synthesized into a strategic threat landscape report on the first of every month.
-- **Dockerized Architecture:** Seamless deployment with persistent storage for vector memory and logs.
 
 ---
 
@@ -20,16 +22,18 @@ Project Sentinel is a fully automated, Dockerized SOC pipeline designed to inges
 
 ```text
 Sentinel/
-├── main.py                # Pipeline orchestration & scheduling
+├── main.py                # Pipeline orchestration, scheduler & real-time monitor
 ├── core/
-│   ├── ingestion.py       # Wazuh alert parsing & normalization
+│   ├── ingestion.py       # Wazuh alert parsing & forensic normalization
 │   ├── enrichment.py      # IP/Hash reputation lookups
 │   ├── memory.py          # ChromaDB vector store management
 │   ├── ai_client.py       # NVIDIA Build API interface
+│   ├── monitor.py         # Real-time alert watcher (Hot-Path)
+│   ├── response.py        # SOAR / Wazuh API remediation engine
 │   ├── dispatch.py        # Email & Webhook delivery
 │   ├── digest.py          # Daily JSON summary extraction
 │   └── monthly.py         # Monthly synthesis engine
-└── templates/             # LLM Prompt templates
+└── templates/             # LLM Prompt templates (Daily, Monthly, Digest)
 ```
 
 ---
@@ -41,6 +45,7 @@ Sentinel/
 - Docker and Docker Compose
 - NVIDIA Build API Key
 - (Optional) VirusTotal and AbuseIPDB API Keys
+- Wazuh API Access (for SOAR features)
 - SMTP Server access (e.g., Gmail App Password)
 
 ### Installation
@@ -56,7 +61,14 @@ Sentinel/
    ```bash
    cp .env.example .env
    ```
-   Edit `.env` with your API keys and configuration.
+   Edit `.env` with your API keys and SOAR configuration:
+   ```bash
+   # SOAR Configuration
+   WAZUH_API_URL=https://your-wazuh-manager:55000
+   WAZUH_API_USER=admin
+   WAZUH_API_PASS=your-password
+   SOAR_MODE=AUDIT  # Set to ENFORCE for automated remediation
+   ```
 
 3. **Mount Wazuh Logs:**
    Ensure the volume mapping in `docker-compose.yml` points to your actual Wazuh alerts file:
@@ -72,8 +84,9 @@ Sentinel/
 
 ---
 
-## 📅 Schedule
+## 📅 Schedule & Operation
 
+- **Real-Time Alerts:** Runs continuously in the background for critical (Level 12+) events.
 - **Daily Report:** Runs at **08:00 AM** every day.
 - **Monthly Report:** Runs at **00:00 Midnight** on the 1st of every month.
 
