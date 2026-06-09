@@ -23,7 +23,8 @@ class WazuhResponseManager:
 
         try:
             auth_url = f"{self.base_url}/security/user/authenticate"
-            response = requests.get(auth_url, auth=(self.user, self.password), verify=False)
+            # Enabled verify=True for production security
+            response = requests.get(auth_url, auth=(self.user, self.password), verify=True)
             response.raise_for_status()
             self.token = response.json().get('data', {}).get('token')
             return True
