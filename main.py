@@ -134,8 +134,8 @@ class ProjectSentinel:
             # Phase 7: SOAR Action Execution
             logger.info("PHASE 7: SOAR Action Execution")
             try:
-                # Look for JSON block in markdown
-                json_match = re.search(r'### AUTOMATED ACTIONS JSON\s+```json\s+(.*?)\s+```', full_report, re.DOTALL)
+                # Look for JSON block in markdown, allowing for extra text after the header
+                json_match = re.search(r'### AUTOMATED ACTIONS JSON.*?\s+```json\s+(.*?)\s+```', full_report, re.DOTALL)
                 if json_match:
                     actions = json.loads(json_match.group(1))
                     for action in actions:
