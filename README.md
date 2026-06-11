@@ -122,6 +122,15 @@ To trigger an immediate run for testing, set `RUN_NOW=true` in your `.env` file 
 - **Read-Only Access:** The Wazuh alerts file is mounted as read-only to ensure system integrity.
 - **Data Persistence:** Vector memory and digest logs are persisted in local volumes (`./chroma_data` and `./data`).
 
+### LLM Security & Pipeline Integrity (The "Flex" Section)
+
+Project Sentinel implements multiple layers of defense to ensure the AI pipeline remains secure and deterministic:
+
+- **Prompt Defenses:** Advanced input sanitization on incoming Wazuh log fields (especially `full_log` and `command`) to prevent **indirect prompt injection** via malicious log payloads. Triple backticks and non-printable characters are stripped or escaped before data reaches the LLM.
+- **Deterministic Formatting:** Uses strict system prompting and structured JSON schema enforcement for SOAR actions to eradicate **LLM hallucinations** in critical security reporting.
+- **Contextual Isolation:** The AI is provided with isolated, relevant context via a 2-stage RAG pipeline, preventing "context poisoning" from large, irrelevant log volumes.
+- **Action Guardrails:** All AI-recommended SOAR actions require a confidence score of >= 8/10 and can be run in `AUDIT` mode for human review before enforcement.
+
 ---
 
 ## License

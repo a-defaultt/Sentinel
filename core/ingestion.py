@@ -50,8 +50,22 @@ class WazuhIngestor:
         except Exception as e:
             logger.error(f"Unexpected error reading alerts: {e}", exc_info=True)
 
+    def _sanitize_field(self, value: Any) -> Any:
+        """
+        Sanitizes input fields to prevent indirect prompt injection.
+        Removes or escapes characters that could disrupt LLM prompt structure.
+        """
+        if not isinstance(value, str):
+            return value
+        
+        # Remove triple backticks which could escape markdown blocks in prompts
+        value = value.replace("```", "'''")
+        # Remove null bytes and non-printable characters
+        value = "".join(char for i, char in enumerate(value) if char.isprintable() or char in "\n\r\t")
+        return value.strip()
+
     def filter_and_extract(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Filters alerts by level and extracts required fields."""
+        """Filters alerts by level and extracts required fields with sanitization."""
         if df.empty:
             return df
 
@@ -64,7 +78,6 @@ class WazuhIngestor:
             return pd.DataFrame()
 
         # Map and extract fields
-        # Mapping based on common Wazuh alert structure
         field_mapping = {
             'timestamp': 'timestamp',
             'rule.level': 'level',
@@ -88,22 +101,20 @@ class WazuhIngestor:
             'data.command': 'command'
         }
 
-        # Some fields might be in different places depending on the decoder
-        # We'll try to fallback if necessary
         extracted_df = pd.DataFrame()
         for src, target in field_mapping.items():
             if src in df.columns:
-                extracted_df[target] = df[src]
+                extracted_df[target] = df[src].apply(self._sanitize_field)
             else:
-                # Fallback for some common variations
+                # Fallback for common variations
                 if target == 'srcip' and 'srcip' in df.columns:
-                    extracted_df[target] = df['srcip']
+                    extracted_df[target] = df['srcip'].apply(self._sanitize_field)
                 elif target == 'hashes' and 'syscheck.sha1_after' in df.columns:
-                    extracted_df[target] = df['syscheck.sha1_after']
+                    extracted_df[target] = df['syscheck.sha1_after'].apply(self._sanitize_field)
                 else:
                     extracted_df[target] = None
 
-        logger.info(f"Extraction complete. {len(extracted_df)} records remaining.")
+        logger.info(f"Extraction complete with sanitization. {len(extracted_df)} records remaining.")
         return extracted_df
 
     def aggregate_alerts(self, df: pd.DataFrame) -> pd.DataFrame:
