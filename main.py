@@ -86,36 +86,41 @@ class ProjectSentinel:
             logger.info("PHASE 4.5: Context Management")
             MAX_ALERT_TOKENS = 40000
             
-            # 1. Measure and Budget
-            alert_json_str = alerts_only_df.to_json(orient='records', indent=2)
-            encoding = tiktoken.get_encoding("cl100k_base")
-            token_count = len(encoding.encode(alert_json_str))
+            try:
+                # 1. Measure and Budget (Using character-based approximation for Llama 3)
+                alert_json_str = alerts_only_df.to_json(orient='records', indent=2)
+                token_count = len(alert_json_str) // 4
+                
+                if token_count <= MAX_ALERT_TOKENS:
+                    today_json = alert_json_str
+                else:
+                    logger.warning(f"Context overflow: {token_count} tokens. Applying statistical compression.")
+                    
+                    # Sort by level descending to keep high priority intact
+                    sorted_df = alerts_only_df.sort_values(by='level', ascending=False)
+                    
+                    # Apply 15% safety buffer to prevent overflow
+                    target_rows = int((MAX_ALERT_TOKENS / token_count) * len(sorted_df) * 0.85)
+                    target_rows = max(1, min(target_rows, len(sorted_df)))
+                    
+                    # Keep top N
+                    kept_df = sorted_df.iloc[:target_rows]
+                    overflow_df = sorted_df.iloc[target_rows:]
+                    
+                    # 2. Statistical Summary for overflow
+                    summary_lines = ["CONTEXT OVERFLOW MITIGATION: The following telemetry was compressed to save space:"]
+                    
+                    if not overflow_df.empty:
+                        stats = overflow_df.groupby(['rule_id', 'description', 'srcip']).size().reset_index(name='count')
+                        for _, row in stats.iterrows():
+                            summary_lines.append(f"- {row['count']} occurrences of Rule {row['rule_id']} ({row['description']}) from Src IP {row['srcip']}.")
+                    
+                    today_json = kept_df.to_json(orient='records', indent=2)
+                    today_json += "\n\n" + "\n".join(summary_lines)
             
-            if token_count <= MAX_ALERT_TOKENS:
-                today_json = alert_json_str
-            else:
-                logger.warning(f"Context overflow: {token_count} tokens. Applying statistical compression.")
-                # Sort by level descending to keep high priority intact
-                sorted_df = alerts_only_df.sort_values(by='level', ascending=False)
-                
-                # Simple greedy approach to find how many rows fit
-                # This is an approximation
-                target_rows = int((MAX_ALERT_TOKENS / token_count) * len(sorted_df))
-                
-                # Keep top N
-                kept_df = sorted_df.iloc[:target_rows]
-                overflow_df = sorted_df.iloc[target_rows:]
-                
-                # 2. Statistical Summary for overflow
-                summary_lines = ["CONTEXT OVERFLOW MITIGATION: The following telemetry was compressed to save space:"]
-                
-                if not overflow_df.empty:
-                    stats = overflow_df.groupby(['rule_id', 'description', 'srcip']).size().reset_index(name='count')
-                    for _, row in stats.iterrows():
-                        summary_lines.append(f"- {row['count']} occurrences of Rule {row['rule_id']} ({row['description']}) from Src IP {row['srcip']}.")
-                
-                today_json = kept_df.to_json(orient='records', indent=2)
-                today_json += "\n\n" + "\n".join(summary_lines)
+            except Exception as e:
+                logger.error(f"Context management failed: {e}. Defaulting to full raw data.", exc_info=True)
+                today_json = alerts_only_df.to_json(orient='records', indent=2)
 
             # Phase 5: AI Report Generation
             logger.info("PHASE 5: AI Report Generation")
