@@ -91,11 +91,13 @@ class NVIDIAClient:
             raise
 
     def rerank(self, query: str, documents: List[str], top_n: int = 5) -> List[int]:
-        """Reranks documents based on a query and returns the indices of the top results."""
+        """
+        Reranks documents based on a query using Stage 2 Semantic Reranking.
+        Includes a fail-safe fallback to Stage 1 (top-N raw results) if Stage 2 fails.
+        """
         if not documents:
             return []
             
-        # Updated NVIDIA Rerank endpoint and structure
         url = f"{self.base_url}/retrieval/nvidia/reranking"
         
         headers = {
@@ -115,14 +117,16 @@ class NVIDIAClient:
             logger.info(f"Reranking {len(documents)} documents for query")
             response = requests.post(url, headers=headers, json=payload, timeout=NVIDIA_TIMEOUT)
             response.raise_for_status()
-            results = response.json().get('rankings', []) # NVIDIA typically returns 'rankings'
+            results = response.json().get('rankings', [])
             
-            # Extract top indices
-            # Format: [{"index": 0, "logit": ...}, ...]
+            # Re-order indices based on semantic relevance scores (logits)
             top_results = sorted(results, key=lambda x: x.get('logit', 0), reverse=True)[:top_n]
             return [item['index'] for item in top_results]
+            
         except Exception as e:
-            logger.error(f"Reranking failed: {e}. Returning first {top_n} results as fallback.")
+            # --- FAIL-SAFE FALLBACK TO STAGE 1 ---
+            logger.warning(f"Stage 2 Reranker failed: {e}. Falling back to top {top_n} Stage 1 vector results.")
+            # Default to the first N results from the original retrieved set
             return list(range(min(len(documents), top_n)))
 
 if __name__ == "__main__":
