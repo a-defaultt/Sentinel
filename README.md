@@ -52,7 +52,7 @@ Sentinel/
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/your-username/Sentinel.git
+   git clone https://github.com/a-defaultt/Sentinel
    cd Sentinel
    ```
 
@@ -123,9 +123,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 Project Sentinel includes a lightweight utility to monitor container health and the last successful pipeline execution.
 
 ### Quick Status Check
-Run the status script directly:
+Run the status script directly via Docker:
 ```bash
-./venv/bin/python3 core/status.py
+docker exec project-sentinel python3 core/status.py
 ```
 
 ### Add Shell Alias (Recommended)
@@ -134,9 +134,9 @@ To make status checks instant, add an alias to your `~/.bashrc`:
    ```bash
    nano ~/.bashrc
    ```
-2. Add the following line at the end of the file (adjust the path to your Project Sentinel directory):
+2. Add the following line at the end of the file:
    ```bash
-   alias sentinel-status='/path/to/Sentinel/venv/bin/python3 /path/to/Sentinel/core/status.py'
+   alias sentinel-status='docker exec project-sentinel python3 core/status.py'
    ```
 3. Refresh your shell:
    ```bash

@@ -13,11 +13,19 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import MONTHLY_DIGEST_PATH
 
 def check_status():
-    # 1. Check Docker status
-    # Note: Assumes running from outside or inside the host where docker command is available
-    status = os.popen("docker ps -f name=project-sentinel --format '{{.Status}}'").read().strip()
+    # 1. Environment Detection
+    in_container = os.path.exists('/.dockerenv')
     
-    # 2. Check last run success date from monthly_digest.jsonl
+    # 2. Check Docker/Container status
+    if in_container:
+        # If the script is running, the container is clearly online
+        status = "ONLINE (Inside Container)"
+    else:
+        # External check (current behavior)
+        status_raw = os.popen("docker ps -f name=project-sentinel --format '{{.Status}}'").read().strip()
+        status = status_raw if status_raw else "OFFLINE (Run: docker-compose up -d)"
+    
+    # 3. Check last run success date from monthly_digest.jsonl
     last_run = "Never (or check logs)"
     if MONTHLY_DIGEST_PATH.exists():
         try:
