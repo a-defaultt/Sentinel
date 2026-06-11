@@ -82,18 +82,51 @@ class ProjectSentinel:
             # Store today's alerts in memory for future
             self.memory.store_alerts(df)
 
+            # Phase 4.5: Context Management (Token-Aware Compression)
+            logger.info("PHASE 4.5: Context Management")
+            MAX_ALERT_TOKENS = 40000
+            
+            # 1. Measure and Budget
+            alert_json_str = alerts_only_df.to_json(orient='records', indent=2)
+            encoding = tiktoken.get_encoding("cl100k_base")
+            token_count = len(encoding.encode(alert_json_str))
+            
+            if token_count <= MAX_ALERT_TOKENS:
+                today_json = alert_json_str
+            else:
+                logger.warning(f"Context overflow: {token_count} tokens. Applying statistical compression.")
+                # Sort by level descending to keep high priority intact
+                sorted_df = alerts_only_df.sort_values(by='level', ascending=False)
+                
+                # Simple greedy approach to find how many rows fit
+                # This is an approximation
+                target_rows = int((MAX_ALERT_TOKENS / token_count) * len(sorted_df))
+                
+                # Keep top N
+                kept_df = sorted_df.iloc[:target_rows]
+                overflow_df = sorted_df.iloc[target_rows:]
+                
+                # 2. Statistical Summary for overflow
+                summary_lines = ["CONTEXT OVERFLOW MITIGATION: The following telemetry was compressed to save space:"]
+                
+                if not overflow_df.empty:
+                    stats = overflow_df.groupby(['rule_id', 'description', 'srcip']).size().reset_index(name='count')
+                    for _, row in stats.iterrows():
+                        summary_lines.append(f"- {row['count']} occurrences of Rule {row['rule_id']} ({row['description']}) from Src IP {row['srcip']}.")
+                
+                today_json = kept_df.to_json(orient='records', indent=2)
+                today_json += "\n\n" + "\n".join(summary_lines)
+
             # Phase 5: AI Report Generation
-            logger.info("PHASE 4: AI Report Generation")
+            logger.info("PHASE 5: AI Report Generation")
             template_path = os.path.join(os.path.dirname(__file__), 'templates', 'prompt_system.txt')
             with open(template_path, 'r') as f:
                 system_prompt_template = f.read()
 
             # Separate core alert data from enrichment data for the prompt
             enrichment_cols = [c for c in df.columns if c.startswith('enrichment_')]
-            alerts_only_df = df.drop(columns=enrichment_cols)
             enrichment_only_df = df[['srcip', 'hashes'] + enrichment_cols]
 
-            today_json = alerts_only_df.to_json(orient='records', indent=2)
             enrichment_json = enrichment_only_df.to_json(orient='records', indent=2)
             hist_context_str = "\n---\n".join(historical_contexts) if historical_contexts else "No relevant historical context found."
 
