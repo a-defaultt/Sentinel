@@ -49,6 +49,16 @@ graph TD
     F -->|HTML Report / Webhook Briefing| G(core/dispatch.py)
 ```
 
+## Architecture Philosophy: Framework-Agnostic RAG
+
+Unlike standard AI applications that rely on heavy orchestration frameworks (LangChain/LlamaIndex), Sentinel utilizes a custom, low-overhead 2-stage retrieval pipeline built directly into `core/memory.py`.
+
+### Why Custom?
+
+1.  **Zero Abstraction Bloat:** Eliminating third-party wrappers minimizes the container's attack surface, reduces memory overhead, and speeds up Docker build times.
+2.  **NVIDIA-Specific Optimization:** Direct control over the embedding pipeline allows exact passing of the `input_type` parameter (query vs. passage) required by NVIDIA NIM models for peak semantic accuracy.
+3.  **Deterministic Fault Tolerance:** Built-in exception handling ensures that if the Stage 2 semantic reranker (`rerank-qa-mistral-4b`) faces API rate-limiting, the pipeline gracefully fails-safe to the top Stage 1 vector candidates, ensuring uninterrupted SOC reporting.
+
 ---
 
 ## Getting Started
