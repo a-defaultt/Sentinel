@@ -13,6 +13,7 @@ Project Sentinel is a fully automated, Dockerized SOC pipeline designed to inges
 - **Deep Root Cause Analysis (RCA):** Captures full forensic logs and process trees to generate detailed attack chains and entry-point hypotheses.
 - **Historical Vector Memory (RAG):** Uses **ChromaDB** to store and query historical threat data. Features a 2-stage retrieval pipeline with the `nv-embedqa-e5-v5` embedding model and `rerank-qa-mistral-4b` reranker for optimal context.
 - **AI-Driven Reporting:** Leverages **NVIDIA Build API** (`llama-3.3-nemotron-super-49b`) to generate professional daily and monthly security reports.
+- **Enterprise-Ready NIM Architecture:** Designed for modularity; while currently using hosted APIs, the pipeline is architected to seamlessly drop-in on-premises **NVIDIA NIM** (Neural Inference Modules) containers for fully air-gapped, self-hosted deployments.
 - **Multi-Channel Dispatch:** Delivers full HTML reports via **SMTP Email** and high-level executive briefings via **Webhooks**.
 - **Self-Synthesizing Monthly Reports:** Maintains a daily digest log (`monthly_digest.jsonl`) that is synthesized into a strategic threat landscape report on the first of every month.
 

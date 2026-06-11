@@ -18,6 +18,12 @@
 
 Project Sentinel is an advanced SOC engine that transcends traditional reporting. It combines automated ingestion, deep forensic enrichment, and real-time monitoring with AI-driven SOAR (Security Orchestration, Automation, and Response) capabilities.
 
+### Enterprise Deployment & Air-Gap Readiness
+While the current implementation utilizes the hosted NVIDIA Build API for rapid development and testing, the architecture is strictly modular. The pipeline is designed to support a **drop-in transition to on-premises NVIDIA NIM** (Neural Inference Modules) containers. This enables:
+- **Fully Air-Gapped Operation:** Processing critical SOC telemetry without external API dependencies.
+- **Enterprise Data Sovereignty:** Ensuring all log data remains within the corporate boundary.
+- **Low Latency:** High-speed inference for real-time response actions.
+
 The system operates on three temporal tracks:
 - **Real-time (Immediate):** Continuous monitoring of `alerts.json` for critical (Level 12+) events, triggering instant webhook notifications.
 - **Daily (08:00 AM):** Comprehensive forensic audit, deep RCA, and automated remediation recommendations.
