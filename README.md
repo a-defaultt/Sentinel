@@ -36,6 +36,18 @@ Sentinel/
 └── templates/             # LLM Prompt templates (Daily, Monthly, Digest)
 ```
 
+### Pipeline Dataflow
+```mermaid
+graph TD
+    A[Wazuh alerts.json] -->|Parse & Filter Lvl 10+| B(core/ingestion.py)
+    B -->|Extract IPs/Hashes| C(core/enrichment.py)
+    C -->|API Lookup: VT & AbuseIPDB| C
+    C -->|Enriched Context| D(core/memory.py ChromaDB)
+    D -->|2-Stage RAG: Embed + Rerank| E(core/ai_client.py NVIDIA NIM)
+    E -->|Llama 3.3 Synthesis| F(core/digest.py & monthly.py)
+    F -->|HTML Report / Webhook Briefing| G(core/dispatch.py)
+```
+
 ---
 
 ## Getting Started
