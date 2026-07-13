@@ -98,7 +98,10 @@ class MonthlyReporter:
         if not self.digest_path.exists():
             return
 
-        archive_name = f"monthly_digest_{datetime.now().strftime('%Y-%m')}.jsonl"
+        # This runs on the 1st of the NEW month — stamp the archive with the
+        # month the digests actually belong to
+        prev_month = datetime.now().replace(day=1) - timedelta(days=1)
+        archive_name = f"monthly_digest_{prev_month.strftime('%Y-%m')}.jsonl"
         archive_path = DATA_DIR / archive_name
         
         try:

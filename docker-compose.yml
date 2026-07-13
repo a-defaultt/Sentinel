@@ -12,6 +12,8 @@ services:
       # mount pins the old inode forever, so mount the directory instead
       # and point the app at the file inside it.
       - ALERTS_JSON_PATH=/app/wazuh-alerts/alerts.json
+      # schedule.at("08:00") fires in container-local time (UTC by default)
+      - TZ=${TZ:-Africa/Tunis}
     volumes:
       # Mount the Wazuh alerts DIRECTORY (adjust source path as needed)
       - /var/ossec/logs/alerts:/app/wazuh-alerts:ro

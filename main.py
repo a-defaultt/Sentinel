@@ -61,15 +61,20 @@ class ProjectSentinel:
         monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         monitor_thread.start()
 
-    def run_daily_pipeline(self):
-        """Executes the full daily SOC pipeline."""
+    def run_daily_pipeline(self, alerts_path: str = None):
+        """Executes the full daily SOC pipeline.
+
+        Args:
+            alerts_path: Optional alerts file override (used for historical
+                batch processing); defaults to the configured ALERTS_JSON_PATH.
+        """
         start_time = datetime.now()
         logger.info(f"Starting Daily Pipeline: {start_time}")
 
         try:
             # Phase 1 & 2: Ingestion & Aggregation
             logger.info("PHASE 1: Ingestion & Aggregation")
-            df = process_daily_alerts()
+            df = process_daily_alerts(alerts_path)
             if df.empty:
                 logger.info("No critical alerts to process today. Skipping report generation.")
                 return

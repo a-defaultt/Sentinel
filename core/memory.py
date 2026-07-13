@@ -40,15 +40,21 @@ class SentinelMemory:
         return self.tokenizer.decode(tokens[:max_tokens])
 
     def _flatten_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Flattens metadata values into strings as ChromaDB doesn't support lists/dicts in metadata."""
+        """Flattens metadata values into Chroma-supported scalars (str/int/
+        float/bool). Handles lists, dicts, NaN, and numpy types."""
         flattened = {}
         for key, value in metadata.items():
             if isinstance(value, (list, dict)):
                 flattened[key] = str(value) if not isinstance(value, list) else ",".join(map(str, value))
-            elif value is None:
+            elif value is None or (isinstance(value, float) and pd.isna(value)):
                 flattened[key] = ""
-            else:
+            elif isinstance(value, (str, int, float, bool)):
                 flattened[key] = value
+            elif hasattr(value, 'item'):
+                # numpy scalar (int64, bool_, ...) — unwrap to native Python
+                flattened[key] = value.item()
+            else:
+                flattened[key] = str(value)
         return flattened
 
     def store_alerts(self, df: pd.DataFrame):
@@ -87,8 +93,13 @@ class SentinelMemory:
             documents.append(doc_str)
             metadatas.append(self._flatten_metadata(clean_metadata))
             
-            # Robust unique ID: date + rule_id + srcip + agent_id
-            unique_id = f"{row.get('timestamp')[:10]}_{row.get('rule_id')}_{row.get('srcip')}_{row.get('agent_id')}"
+            # Robust unique ID: date + rule_id + srcip + agent_id.
+            # timestamp can be NaN (a float — slicing it aborted the whole
+            # daily pipeline), so coerce defensively.
+            ts_raw = row.get('timestamp')
+            ts = str(ts_raw) if pd.notna(ts_raw) else ''
+            date_part = ts[:10] if ts else 'unknown-date'
+            unique_id = f"{date_part}_{row.get('rule_id')}_{row.get('srcip')}_{row.get('agent_id')}"
             ids.append(unique_id)
 
         if documents:

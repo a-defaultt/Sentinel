@@ -4,6 +4,7 @@ Handles the delivery of security reports via SMTP email and Webhooks.
 """
 import smtplib
 import json
+import time
 import requests
 import logging
 from email.mime.multipart import MIMEMultipart
@@ -24,6 +25,22 @@ class Dispatcher:
         self.smtp_from = SMTP_FROM
         self.smtp_to = SMTP_TO
         self.webhook_url = WEBHOOK_URL
+
+    @staticmethod
+    def _with_retries(fn, what: str, attempts: int = 3, backoff: int = 20) -> bool:
+        """Runs fn up to `attempts` times with linear backoff. A dropped
+        daily report used to be a single swallowed log line."""
+        for attempt in range(1, attempts + 1):
+            try:
+                fn()
+                logger.info(f"{what} sent successfully.")
+                return True
+            except Exception as e:
+                logger.error(f"{what} attempt {attempt}/{attempts} failed: {e}")
+                if attempt < attempts:
+                    time.sleep(backoff * attempt)
+        logger.error(f"{what}: all {attempts} attempts failed.")
+        return False
 
     def send_email(self, subject: str, markdown_body: str, attachments: List[Dict[str, Any]] = None):
         """Sends a professional email with dashboard styling and attachments."""
@@ -111,15 +128,14 @@ class Dispatcher:
                 except Exception as e:
                     logger.error(f"Failed to attach file {att.get('filename')}: {e}")
 
-        try:
-            logger.info(f"Sending styled email to {self.smtp_to}: {subject}")
+        def _send():
             with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30) as server:
                 server.starttls()
                 server.login(self.smtp_user, self.smtp_pass)
                 server.send_message(msg)
-            logger.info("Email sent successfully.")
-        except Exception as e:
-            logger.error(f"Error sending email: {e}")
+
+        logger.info(f"Sending styled email to {self.smtp_to}: {subject}")
+        return self._with_retries(_send, "Email")
 
 
     def send_webhook(self, briefing: str):
@@ -134,13 +150,13 @@ class Dispatcher:
             "type": "executive_briefing"
         }
 
-        try:
-            logger.info(f"Sending briefing to webhook: {self.webhook_url}")
+        def _send():
             response = requests.post(self.webhook_url, json=payload, timeout=10)
             response.raise_for_status()
-            logger.info("Webhook sent successfully.")
-        except Exception as e:
-            logger.error(f"Error sending webhook: {e}")
+
+        # Webhook URLs often embed a secret token — never log them
+        logger.info("Sending briefing to webhook.")
+        return self._with_retries(_send, "Webhook", backoff=5)
 
 if __name__ == "__main__":
     # Test

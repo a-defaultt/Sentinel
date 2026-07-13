@@ -160,9 +160,13 @@ class WazuhIngestor:
         logger.info(f"Aggregation complete. Reduced to {len(grouped)} unique events.")
         return grouped
 
-def process_daily_alerts() -> pd.DataFrame:
-    """Helper function to run the full ingestion pipeline across all chunks."""
-    ingestor = WazuhIngestor()
+def process_daily_alerts(file_path: Optional[str] = None) -> pd.DataFrame:
+    """Helper function to run the full ingestion pipeline across all chunks.
+
+    Args:
+        file_path: Alerts file to process; defaults to ALERTS_JSON_PATH.
+    """
+    ingestor = WazuhIngestor(file_path) if file_path else WazuhIngestor()
     all_processed_chunks = []
     
     for chunk_df in ingestor.read_alerts():

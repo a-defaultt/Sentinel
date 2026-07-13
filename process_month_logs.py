@@ -11,29 +11,30 @@ logger = logging.getLogger("MonthProcessor")
 def process_logs(log_dir):
     # Set to AUDIT mode to prevent accidental blocking based on historical data
     os.environ["SOAR_MODE"] = "AUDIT"
-    os.environ["RUN_NOW"] = "true"
-    
+
     # Get all JSON compressed files
     log_files = sorted(glob.glob(os.path.join(log_dir, "ossec-alerts-*.json.gz")))
-    
+
     if not log_files:
         logger.error(f"No log files found in {log_dir}")
         return
 
     logger.info(f"Found {len(log_files)} log files to process.")
 
+    # One instance for the whole batch — config is frozen at import time,
+    # so the file path must be passed per run, not via environment variables
+    # (setting ALERTS_JSON_PATH here had no effect and every iteration used
+    # to silently reprocess the same default file)
+    sentinel = ProjectSentinel()
+
     for log_file in log_files:
         logger.info(f"--- Processing: {log_file} ---")
-        
-        # Point pipeline to current log file
-        os.environ["ALERTS_JSON_PATH"] = log_file
-        
+
         try:
-            sentinel = ProjectSentinel()
-            sentinel.run_daily_pipeline()
+            sentinel.run_daily_pipeline(alerts_path=log_file)
         except Exception as e:
             logger.error(f"Failed to process {log_file}: {e}")
-            
+
         # Brief pause to respect API rate limits
         logger.info("Waiting 10 seconds before next file...")
         time.sleep(10)

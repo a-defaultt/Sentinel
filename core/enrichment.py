@@ -4,10 +4,12 @@ Integrates with AbuseIPDB and VirusTotal to provide threat intelligence for IOCs
 Includes a persistent local cache to improve efficiency and reduce API calls.
 """
 import time
+import ipaddress
 import requests
 import logging
 import json
 import os
+import pandas as pd
 from typing import Dict, Any, List, Optional
 from config import (
     VIRUSTOTAL_API_KEY, 
@@ -19,6 +21,16 @@ from config import (
 )
 
 CACHE_FILE = DATA_DIR / "enrichment_cache.json"
+CACHE_TTL_SECONDS = 7 * 24 * 3600  # reputations go stale; refresh weekly
+
+
+def _is_enrichable_ip(ip: Any) -> bool:
+    """Only public (global) IPs are worth an API lookup — covers loopback,
+    RFC1918 (including 172.16-31.x), link-local, and reserved ranges."""
+    try:
+        return ipaddress.ip_address(str(ip)).is_global
+    except ValueError:
+        return False
 
 class ThreatIntelEnricher:
     def __init__(self):
@@ -27,6 +39,23 @@ class ThreatIntelEnricher:
         self.vt_last_call = 0
         self.vt_min_interval = 60.0 / VT_REQ_PER_MIN if VT_REQ_PER_MIN > 0 else 15.0
         self.cache = self._load_cache()
+        self._cache_dirty = False
+
+    def _cache_get(self, bucket: str, key: str) -> Optional[Dict[str, Any]]:
+        """Returns a cached entry if present and younger than the TTL.
+        Entries written before TTLs existed have no timestamp and refresh."""
+        entry = self.cache[bucket].get(key)
+        if entry is None:
+            return None
+        if time.time() - entry.get('_cached_at', 0) > CACHE_TTL_SECONDS:
+            return None
+        return {k: v for k, v in entry.items() if k != '_cached_at'}
+
+    def _cache_put(self, bucket: str, key: str, result: Dict[str, Any]):
+        """Stores an entry in memory; flushed to disk once per run by
+        enrich_dataframe rather than on every single API call."""
+        self.cache[bucket][key] = {**result, '_cached_at': time.time()}
+        self._cache_dirty = True
 
     def _load_cache(self) -> Dict[str, Any]:
         """Loads the persistent cache from disk."""
@@ -48,12 +77,13 @@ class ThreatIntelEnricher:
 
     def get_ip_reputation(self, ip: str) -> Dict[str, Any]:
         """Fetches IP reputation from AbuseIPDB with local caching."""
-        if not ip or ip == 'unknown' or ip.startswith('127.') or ip.startswith('192.168.') or ip.startswith('10.'):
+        if not _is_enrichable_ip(ip):
             return {}
 
         # Check Cache
-        if ip in self.cache["ips"]:
-            return self.cache["ips"][ip]
+        cached = self._cache_get("ips", ip)
+        if cached is not None:
+            return cached
 
         if not self.abuse_api_key:
             logger.warning("AbuseIPDB API key not set. Skipping IP enrichment.")
@@ -82,9 +112,7 @@ class ThreatIntelEnricher:
                 'usage_type': data.get('usageType')
             }
             
-            # Store in cache
-            self.cache["ips"][ip] = result
-            self._save_cache()
+            self._cache_put("ips", ip, result)
             return result
         except Exception as e:
             logger.error(f"Error checking AbuseIPDB for {ip}: {e}")
@@ -92,12 +120,13 @@ class ThreatIntelEnricher:
 
     def get_hash_reputation(self, file_hash: str) -> Dict[str, Any]:
         """Fetches hash reputation from VirusTotal with local caching."""
-        if not file_hash:
+        if not file_hash or not isinstance(file_hash, str):
             return {}
 
         # Check Cache
-        if file_hash in self.cache["hashes"]:
-            return self.cache["hashes"][file_hash]
+        cached = self._cache_get("hashes", file_hash)
+        if cached is not None:
+            return cached
 
         if not self.vt_api_key:
             logger.warning("VirusTotal API key not set. Skipping hash enrichment.")
@@ -130,9 +159,7 @@ class ThreatIntelEnricher:
                     'vt_status': 'found'
                 }
             
-            # Store in cache
-            self.cache["hashes"][file_hash] = result
-            self._save_cache()
+            self._cache_put("hashes", file_hash, result)
             return result
         except Exception as e:
             logger.error(f"Error checking VirusTotal for {file_hash}: {e}")
@@ -143,9 +170,10 @@ class ThreatIntelEnricher:
         if df.empty:
             return df
 
-        # Unique IPs and Hashes for efficiency
-        unique_ips = [ip for ip in df['srcip'].unique() if ip and ip != 'unknown']
-        unique_hashes = [h for h in df['hashes'].unique() if h] if 'hashes' in df.columns else []
+        # Unique IPs and Hashes for efficiency. pd.notna first: NaN is a
+        # truthy float, so a bare `if h` used to send literal 'nan' to the APIs
+        unique_ips = [ip for ip in df['srcip'].unique() if pd.notna(ip) and ip and ip != 'unknown']
+        unique_hashes = [h for h in df['hashes'].unique() if pd.notna(h) and h] if 'hashes' in df.columns else []
 
         ip_cache = {}
         for ip in unique_ips:
@@ -161,6 +189,10 @@ class ThreatIntelEnricher:
             df['enrichment_hash'] = df['hashes'].map(hash_cache)
         else:
             df['enrichment_hash'] = None
+
+        if self._cache_dirty:
+            self._save_cache()
+            self._cache_dirty = False
 
         logger.info("Enrichment complete.")
         return df
