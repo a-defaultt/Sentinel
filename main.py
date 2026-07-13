@@ -42,15 +42,21 @@ class ProjectSentinel:
         """Starts the background thread for real-time critical alerting."""
         def monitor_loop():
             logger.info("Real-time Monitor Thread Started.")
-            for alert in self.monitor.monitor_critical(min_level=12):
+            # Outer restart loop: the monitor must never die silently
+            while True:
                 try:
-                    # Quick enrichment & alert
-                    desc = alert.get('rule', {}).get('description', 'No description')
-                    level = alert.get('rule', {}).get('level', 0)
-                    briefing = f"**CRITICAL ALERT DETECTED (Level {level})**\n- **Description:** {desc}\n- **Agent:** {alert.get('agent', {}).get('name')}\n- **Source IP:** {alert.get('data', {}).get('srcip', 'N/A')}"
-                    self.dispatcher.send_webhook(briefing)
+                    for alert in self.monitor.monitor_critical(min_level=12):
+                        try:
+                            # Quick enrichment & alert
+                            desc = alert.get('rule', {}).get('description', 'No description')
+                            level = alert.get('rule', {}).get('level', 0)
+                            briefing = f"**CRITICAL ALERT DETECTED (Level {level})**\n- **Description:** {desc}\n- **Agent:** {alert.get('agent', {}).get('name')}\n- **Source IP:** {alert.get('data', {}).get('srcip', 'N/A')}"
+                            self.dispatcher.send_webhook(briefing)
+                        except Exception as e:
+                            logger.error(f"Error in real-time monitor loop: {e}")
                 except Exception as e:
-                    logger.error(f"Error in real-time monitor loop: {e}")
+                    logger.error(f"Real-time monitor crashed: {e}. Restarting in 30s.", exc_info=True)
+                time.sleep(30)
 
         monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         monitor_thread.start()
@@ -201,14 +207,19 @@ class ProjectSentinel:
 
     def run_monthly_pipeline_if_first_day(self):
         """Checks if today is the first of the month and runs the monthly pipeline."""
-        if datetime.now().day == 1:
-            logger.info("First day of the month detected. Starting Monthly Pipeline...")
-            # Monthly logic will be implemented in core/monthly.py
-            from core.monthly import MonthlyReporter
-            reporter = MonthlyReporter(self.ai_client, self.dispatcher)
-            reporter.run_pipeline()
-        else:
-            logger.info("Not the first day of the month. Monthly pipeline skipped.")
+        # The schedule library does not catch job exceptions — anything
+        # escaping this method would kill the main scheduler loop.
+        try:
+            if datetime.now().day == 1:
+                logger.info("First day of the month detected. Starting Monthly Pipeline...")
+                # Monthly logic will be implemented in core/monthly.py
+                from core.monthly import MonthlyReporter
+                reporter = MonthlyReporter(self.ai_client, self.dispatcher)
+                reporter.run_pipeline()
+            else:
+                logger.info("Not the first day of the month. Monthly pipeline skipped.")
+        except Exception as e:
+            logger.error(f"Monthly Pipeline Failed: {e}", exc_info=True)
 
 def main():
     sentinel = ProjectSentinel()

@@ -7,9 +7,14 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # Wazuh rotates alerts.json (rename + recreate). A single-file bind
+      # mount pins the old inode forever, so mount the directory instead
+      # and point the app at the file inside it.
+      - ALERTS_JSON_PATH=/app/wazuh-alerts/alerts.json
     volumes:
-      # Mount Wazuh alerts (adjust source path as needed)
-      - /var/ossec/logs/alerts/alerts.json:/app/data/alerts.json:ro
+      # Mount the Wazuh alerts DIRECTORY (adjust source path as needed)
+      - /var/ossec/logs/alerts:/app/wazuh-alerts:ro
       # Persist ChromaDB memory
       - ./chroma_data:/app/chroma_data
       # Persist monthly digests and local data

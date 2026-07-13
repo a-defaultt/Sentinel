@@ -46,34 +46,46 @@ class MonthlyReporter:
             return {}
 
         df = pd.DataFrame(digests)
-        
+
+        # Digests are LLM-extracted JSON — any key may be missing from any
+        # line, so every column access below is guarded.
+
         # MITRE Heatmap
         mitre_list = []
-        for tactics in df['top_mitre_tactics']:
-            if isinstance(tactics, list):
-                mitre_list.extend(tactics)
-        
+        if 'top_mitre_tactics' in df.columns:
+            for tactics in df['top_mitre_tactics']:
+                if isinstance(tactics, list):
+                    mitre_list.extend(tactics)
+
         mitre_heatmap = pd.Series(mitre_list).value_counts().to_dict() if mitre_list else {}
-        
+
         # Top IOCs
         all_iocs = []
-        for iocs in df['iocs']:
-            if isinstance(iocs, list):
-                all_iocs.extend(iocs)
+        if 'iocs' in df.columns:
+            for iocs in df['iocs']:
+                if isinstance(iocs, list):
+                    all_iocs.extend(iocs)
         top_iocs = pd.Series(all_iocs).value_counts().head(10).to_dict() if all_iocs else {}
-        
+
         # Busiest Days
-        busiest_days = df.sort_values(by='total_critical_events', ascending=False).head(3)[['date', 'total_critical_events']].to_dict(orient='records')
-        
+        busiest_days = []
+        total_events = 0
+        if 'total_critical_events' in df.columns:
+            df['total_critical_events'] = pd.to_numeric(df['total_critical_events'], errors='coerce').fillna(0)
+            total_events = int(df['total_critical_events'].sum())
+            if 'date' in df.columns:
+                busiest_days = df.sort_values(by='total_critical_events', ascending=False).head(3)[['date', 'total_critical_events']].to_dict(orient='records')
+
         # Novel IOCs
         novel_iocs = []
-        for n_iocs in df.get('novel_iocs', []):
-            if isinstance(n_iocs, list):
-                novel_iocs.extend(n_iocs)
+        if 'novel_iocs' in df.columns:
+            for n_iocs in df['novel_iocs']:
+                if isinstance(n_iocs, list):
+                    novel_iocs.extend(n_iocs)
         novel_iocs = list(set(novel_iocs))
 
         return {
-            "total_events_month": int(df['total_critical_events'].sum()),
+            "total_events_month": total_events,
             "mitre_heatmap": mitre_heatmap,
             "top_iocs": top_iocs,
             "busiest_days": busiest_days,
