@@ -79,11 +79,11 @@ class ProjectSentinel:
                 logger.info("No critical alerts to process today. Skipping report generation.")
                 return
 
-            # Phase 3: IOC Enrichment
+            # Phase 2: IOC Enrichment
             logger.info("PHASE 2: IOC Enrichment")
             df = self.enricher.enrich_dataframe(df)
 
-            # Phase 4: Historical Memory (RAG)
+            # Phase 3: Historical Memory (RAG)
             logger.info("PHASE 3: Historical Memory Retrieval")
             # Collect query terms (top IPs and Descriptions)
             query_terms = df.sort_values(by='count', ascending=False).head(5)['srcip'].tolist()
@@ -94,8 +94,8 @@ class ProjectSentinel:
             # Store today's alerts in memory for future
             self.memory.store_alerts(df)
 
-            # Phase 4.5: Context Management (Token-Aware Compression)
-            logger.info("PHASE 4.5: Context Management")
+            # Phase 4: Context Management (Token-Aware Compression)
+            logger.info("PHASE 4: Context Management")
             MAX_ALERT_TOKENS = 40000
 
             # Core alert data only — enrichment columns are passed to the
@@ -170,11 +170,11 @@ class ProjectSentinel:
                 briefing = full_report.split("<briefing>")[1].split("</briefing>")[0].strip()
 
             # Phase 6: Digest Extraction
-            logger.info("PHASE 5: Digest Extraction")
+            logger.info("PHASE 6: Digest Extraction")
             self.digest_manager.extract_and_append(full_report)
 
             # Phase 7: Dispatch
-            logger.info("PHASE 6: Dispatch")
+            logger.info("PHASE 7: Dispatch")
             # Prepare attachments
             attachments = [
                 {'filename': f'alerts_{datetime.now().strftime("%Y-%m-%d")}.json', 'content': today_json.encode()},
@@ -185,8 +185,8 @@ class ProjectSentinel:
             self.dispatcher.send_email(subject, full_report, attachments)
             self.dispatcher.send_webhook(briefing)
 
-            # Phase 7: SOAR Action Execution
-            logger.info("PHASE 7: SOAR Action Execution")
+            # Phase 8: SOAR Action Execution
+            logger.info("PHASE 8: SOAR Action Execution")
             try:
                 # Look for JSON block in markdown, allowing for extra text after the header
                 json_match = re.search(r'### AUTOMATED ACTIONS JSON.*?\s+```json\s+(.*?)\s+```', full_report, re.DOTALL)
@@ -242,8 +242,17 @@ def main():
     if os.getenv("RUN_NOW") == "true":
         sentinel.run_daily_pipeline()
 
+    # Touched every tick; the Docker HEALTHCHECK flags the container
+    # unhealthy if this file goes stale
+    heartbeat_file = os.getenv("HEARTBEAT_FILE", "/tmp/sentinel-heartbeat")
+
     while True:
         schedule.run_pending()
+        try:
+            with open(heartbeat_file, 'w') as hb:
+                hb.write(str(datetime.now()))
+        except OSError:
+            pass
         time.sleep(30)
 
 if __name__ == "__main__":

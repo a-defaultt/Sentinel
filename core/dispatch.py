@@ -5,6 +5,7 @@ Handles the delivery of security reports via SMTP email and Webhooks.
 import smtplib
 import json
 import time
+import bleach
 import requests
 import logging
 from email.mime.multipart import MIMEMultipart
@@ -15,6 +16,16 @@ from config import (
     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_TO,
     WEBHOOK_URL, logger
 )
+
+# Tags markdown legitimately produces in reports; anything else (script,
+# iframe, img, event handlers) came in via alert/LLM content and is stripped
+ALLOWED_TAGS = [
+    "a", "b", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3",
+    "h4", "h5", "h6", "hr", "i", "li", "ol", "p", "pre", "span", "strong",
+    "sub", "sup", "table", "tbody", "td", "th", "thead", "tr", "ul",
+]
+ALLOWED_ATTRS = {"a": ["href", "title"], "th": ["align"], "td": ["align"]}
+
 
 class Dispatcher:
     def __init__(self):
@@ -51,6 +62,9 @@ class Dispatcher:
         import markdown
         # Convert Markdown to HTML with advanced extensions for better data structuring
         html_content = markdown.markdown(markdown_body, extensions=['tables', 'fenced_code', 'toc'])
+        # Report content is LLM output over attacker-influenced log data —
+        # sanitize so injected HTML can't ride into the email
+        html_content = bleach.clean(html_content, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS, strip=True)
 
         # Professional HTML Wrapper with improved data structure styling
         styled_html = f"""

@@ -36,9 +36,6 @@ chroma_data/
 *.json
 *.csv
 
-# Docker
-.dockerignore
-
 # IDEs
 .vscode/
 .idea/

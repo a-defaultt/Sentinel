@@ -1,0 +1,19 @@
+# Secrets — never bake credentials into image layers
+.env
+
+# Local state and data (mounted as volumes at runtime)
+data/
+chroma_data/
+historical_logs/
+
+# Development artifacts
+venv/
+__pycache__/
+*.pyc
+.git/
+.github/
+.gitignore
+.dockerignore
+README.md
+LICENSE
+*.md
