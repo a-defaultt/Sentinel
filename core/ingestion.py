@@ -7,7 +7,7 @@ import pandas as pd
 import logging
 import gzip
 import os
-from typing import List, Optional, Generator
+from typing import Any, List, Optional, Generator
 from config import ALERTS_JSON_PATH, MIN_RULE_LEVEL, logger
 
 class WazuhIngestor:

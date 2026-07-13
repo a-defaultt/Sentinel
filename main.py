@@ -4,6 +4,7 @@ Sets up the scheduler and manages the execution of daily and monthly SOC pipelin
 """
 import os
 import time
+import json
 import schedule
 import logging
 import pandas as pd
@@ -85,7 +86,11 @@ class ProjectSentinel:
             # Phase 4.5: Context Management (Token-Aware Compression)
             logger.info("PHASE 4.5: Context Management")
             MAX_ALERT_TOKENS = 40000
-            
+
+            # Core alert data only — enrichment columns are passed to the
+            # prompt separately as enrichment_only_df in Phase 5
+            alerts_only_df = df[[c for c in df.columns if not c.startswith('enrichment_')]]
+
             try:
                 # 1. Measure and Budget (Using character-based approximation for Llama 3)
                 alert_json_str = alerts_only_df.to_json(orient='records', indent=2)
