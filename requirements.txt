@@ -8,3 +8,5 @@ tiktoken>=0.7,<1
 markdown>=3.5,<4
 toml>=0.10,<1
 bleach>=6.0,<7
+gspread>=6.0,<7
+google-auth>=2.0,<3

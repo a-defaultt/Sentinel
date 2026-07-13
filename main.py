@@ -38,20 +38,85 @@ class ProjectSentinel:
         self.monitor = AlertMonitor()
         self.response_manager = WazuhResponseManager()
 
+    @staticmethod
+    def _extract_alert_hashes(alert: Dict[str, Any]) -> List[str]:
+        """Collects file hashes from the common Wazuh alert locations."""
+        hashes = []
+        h = alert.get('data', {}).get('hashes')
+        if h:
+            hashes.append(str(h))
+        syscheck = alert.get('syscheck', {})
+        for field in ('sha256_after', 'sha1_after', 'md5_after'):
+            v = syscheck.get(field)
+            if v:
+                hashes.append(str(v))
+        return hashes
+
     def start_realtime_monitor(self):
-        """Starts the background thread for real-time critical alerting."""
+        """Starts the background thread for real-time critical alerting.
+
+        Tails ALL alerts (not just level >= 12): a GridPulse IOC match on a
+        low-level alert must still fire immediately, and matched source IPs
+        are handed to the SOAR layer (which enforces its own guardrails and
+        AUDIT/ENFORCE mode).
+        """
         def monitor_loop():
             logger.info("Real-time Monitor Thread Started.")
+            gp_iocs = {}
+            gp_mtime = 0.0
+
             # Outer restart loop: the monitor must never die silently
             while True:
                 try:
-                    for alert in self.monitor.monitor_critical(min_level=12):
+                    for alert in self.monitor.tail_alerts():
                         try:
-                            # Quick enrichment & alert
-                            desc = alert.get('rule', {}).get('description', 'No description')
+                            # Reload the IOC cache only when the daily sync
+                            # actually refreshed it
+                            mtime = self.enricher.sheets_client.cache_mtime()
+                            if mtime != gp_mtime:
+                                gp_iocs = self.enricher.sheets_client.load_cached_iocs()
+                                gp_mtime = mtime
+                                logger.info(f"Real-time monitor loaded {len(gp_iocs)} GridPulse IOCs.")
+
                             level = alert.get('rule', {}).get('level', 0)
-                            briefing = f"**CRITICAL ALERT DETECTED (Level {level})**\n- **Description:** {desc}\n- **Agent:** {alert.get('agent', {}).get('name')}\n- **Source IP:** {alert.get('data', {}).get('srcip', 'N/A')}"
+                            srcip = alert.get('data', {}).get('srcip')
+
+                            matched_info = None
+                            matched_value = None
+                            if srcip and srcip in gp_iocs:
+                                matched_info, matched_value = gp_iocs[srcip], srcip
+                            else:
+                                for h in self._extract_alert_hashes(alert):
+                                    if h in gp_iocs:
+                                        matched_info, matched_value = gp_iocs[h], h
+                                        break
+
+                            if level < 12 and matched_info is None:
+                                continue
+
+                            desc = alert.get('rule', {}).get('description', 'No description')
+                            agent_name = alert.get('agent', {}).get('name', 'N/A')
+                            agent_id = alert.get('agent', {}).get('id', '000')
+
+                            briefing = f"**CRITICAL ALERT DETECTED (Level {level})**\n- **Description:** {desc}\n- **Agent:** {agent_name}\n- **Source IP:** {srcip or 'N/A'}"
+                            if matched_info is not None:
+                                briefing += (
+                                    f"\n- **THREAT INTEL MATCH:** {matched_value} "
+                                    f"({matched_info.get('type')}) is a known indicator "
+                                    f"from GridPulse (source: {matched_info.get('source')})"
+                                )
                             self.dispatcher.send_webhook(briefing)
+
+                            # SOAR: only IP-type matches on the alert's srcip are
+                            # actionable; execute_action applies the guardrails
+                            if matched_info is not None and matched_info.get('bucket') == 'ip' \
+                                    and srcip and matched_value == srcip:
+                                self.response_manager.execute_action(
+                                    action_type="BLOCK_IP",
+                                    target=srcip,
+                                    agent_id=agent_id,
+                                    reasoning=f"GridPulse IOC match: {srcip} (source: {matched_info.get('source')})"
+                                )
                         except Exception as e:
                             logger.error(f"Error in real-time monitor loop: {e}")
                 except Exception as e:
@@ -72,6 +137,11 @@ class ProjectSentinel:
         logger.info(f"Starting Daily Pipeline: {start_time}")
 
         try:
+            # Phase 0: Refresh the GridPulse threat intel cache. Best-effort —
+            # on failure matching falls back to the previous cache.
+            logger.info("PHASE 0: Syncing GridPulse IOC feed from Google Sheets")
+            self.enricher.sheets_client.sync_iocs()
+
             # Phase 1 & 2: Ingestion & Aggregation
             logger.info("PHASE 1: Ingestion & Aggregation")
             df = process_daily_alerts(alerts_path)

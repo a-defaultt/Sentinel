@@ -40,6 +40,9 @@ class ThreatIntelEnricher:
         self.vt_min_interval = 60.0 / VT_REQ_PER_MIN if VT_REQ_PER_MIN > 0 else 15.0
         self.cache = self._load_cache()
         self._cache_dirty = False
+        # GridPulse threat intel feed (local cache of the shared Google Sheet)
+        from core.google_sheets_client import GoogleSheetsIOCClient
+        self.sheets_client = GoogleSheetsIOCClient()
 
     def _cache_get(self, bucket: str, key: str) -> Optional[Dict[str, Any]]:
         """Returns a cached entry if present and younger than the TTL.
@@ -194,7 +197,52 @@ class ThreatIntelEnricher:
             self._save_cache()
             self._cache_dirty = False
 
+        # Cross-reference against the GridPulse IOC feed (local cache, no
+        # API calls) and escalate matches to level 15 (critical)
+        df = self._match_gridpulse_iocs(df)
+
         logger.info("Enrichment complete.")
+        return df
+
+    def _match_gridpulse_iocs(self, df: Any) -> Any:
+        """Flags rows whose srcip or hash appears in the GridPulse feed and
+        raises their level to 15 so they surface at the top of the report."""
+        df['enrichment_gridpulse_match'] = False
+        df['enrichment_gridpulse_source'] = None
+        df['enrichment_gridpulse_type'] = None
+
+        gp_iocs = self.sheets_client.load_cached_iocs()
+        if not gp_iocs:
+            return df
+
+        matches = 0
+        for idx, row in df.iterrows():
+            candidates = []
+            ip = row.get('srcip')
+            if pd.notna(ip) and ip and ip != 'unknown':
+                candidates.append(str(ip))
+            h = row.get('hashes') if 'hashes' in df.columns else None
+            if pd.notna(h) and h:
+                candidates.append(str(h))
+
+            for candidate in candidates:
+                info = gp_iocs.get(candidate)
+                if info is None:
+                    continue
+                df.at[idx, 'enrichment_gridpulse_match'] = True
+                df.at[idx, 'enrichment_gridpulse_source'] = info.get('source', 'GridPulse')
+                df.at[idx, 'enrichment_gridpulse_type'] = info.get('type')
+                if 'level' in df.columns:
+                    df.at[idx, 'level'] = max(int(row.get('level') or 0), 15)
+                matches += 1
+                logger.warning(
+                    f"GridPulse IOC match: {candidate} ({info.get('type')}, "
+                    f"source: {info.get('source')}) — rule {row.get('rule_id')} escalated to level 15"
+                )
+                break
+
+        if matches:
+            logger.info(f"GridPulse IOC matching: {matches} alert(s) matched the feed.")
         return df
 
 if __name__ == "__main__":

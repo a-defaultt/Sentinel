@@ -68,6 +68,14 @@ SMTP_TO = os.getenv("SMTP_TO")
 # Webhook Settings
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
+# Google Sheets threat intel feed (GridPulse IOCs) — names mirror GridPulse's
+GOOGLE_SHEETS_CREDENTIALS_PATH = Path(os.getenv(
+    "GOOGLE_SHEETS_CREDENTIALS_PATH", str(DATA_DIR / "google-service-account.json")
+))
+GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
+GOOGLE_SHEET_WORKSHEET_NAME = os.getenv("GOOGLE_SHEET_WORKSHEET_NAME", "IOCs")
+GOOGLE_SHEETS_SYNC_ENABLED = os.getenv("GOOGLE_SHEETS_SYNC_ENABLED", "true").lower() in ("true", "1", "yes")
+
 # Rate Limiting
 VT_REQ_PER_MIN = 4
 ABUSEIPDB_DAILY_LIMIT = 1000
