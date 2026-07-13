@@ -25,9 +25,12 @@ While the current implementation utilizes the hosted NVIDIA Build API for rapid 
 - **Low Latency:** High-speed inference for real-time response actions.
 
 The system operates on three temporal tracks:
-- **Real-time (Immediate):** Continuous monitoring of `alerts.json` for critical (Level 12+) events, triggering instant webhook notifications.
-- **Daily (08:00 AM):** Comprehensive forensic audit, deep RCA, and automated remediation recommendations.
+- **Real-time (Immediate):** Continuous monitoring of `alerts.json` for critical (Level 12+) events, *or* any alert matching the GridPulse threat intel feed regardless of level, triggering instant webhook notifications and (on IP matches) SOAR blocking.
+- **Daily (08:00 AM):** GridPulse feed sync, comprehensive forensic audit, deep RCA, and automated remediation recommendations.
 - **Monthly (1st, 00:00):** Strategic synthesis of the threat landscape and MITRE Tactic Heatmaps.
+
+### Threat Intel Feed Integration
+Sentinel consumes the IOC feed published by **GridPulse** to a shared Google Sheet via a read-only service account (`spreadsheets.readonly` — Sentinel can never write to the feed). The sheet is synced to a local JSON cache once per daily run and reloaded by the real-time monitor whenever the cache changes (mtime check, no polling overhead). Alerts whose `srcip` or file hash appears in the feed are escalated to Level 15 and flagged with the matched indicator's source.
 
 ---
 
@@ -38,12 +41,13 @@ wazuh-ai-reporter/
 ├── config.py                      # .env loading, all environment variables
 ├── core/
 │   ├── ingestion.py               # Log reading, forensic field extraction, aggregation
-│   ├── monitor.py                 # Real-time non-blocking file watcher
-│   ├── response.py                # Wazuh API client for SOAR actions
-│   ├── enrichment.py              # VirusTotal + AbuseIPDB API handlers
+│   ├── monitor.py                 # Real-time non-blocking file watcher (rotation/truncation aware)
+│   ├── response.py                # Wazuh API client for SOAR actions (guardrailed)
+│   ├── enrichment.py              # VirusTotal + AbuseIPDB API handlers + GridPulse IOC matching
+│   ├── google_sheets_client.py    # Read-only sync of the shared GridPulse IOC feed
 │   ├── memory.py                  # ChromaDB init, embed, store, query, rerank
 │   ├── ai_client.py               # NVIDIA API: Nemotron, Mistral fallback, reranker
-│   ├── dispatch.py                # SMTP email + webhook POST logic
+│   ├── dispatch.py                # SMTP email (sanitized) + webhook POST logic, retried
 │   ├── digest.py                  # Daily JSON summary extraction
 │   └── monthly.py                 # Monthly synthesis engine
 ├── templates/
@@ -100,15 +104,18 @@ All AI calls go to the NVIDIA Build API (`api.nvidia.com`). The same `NVIDIA_API
 
 ## 7. Real-Time Monitor (Hot-Path)
 
-- Runs in a background `threading.Thread(daemon=True)`.
-- Uses `core.monitor.AlertMonitor` to tail `alerts.json`.
-- Filters for `rule.level >= 12`.
+- Runs in a background `threading.Thread(daemon=True)`, restarted automatically if the loop ever raises.
+- Uses `core.monitor.AlertMonitor.tail_alerts()`, which detects file rotation (inode change) and truncation and reopens transparently — a single-file bind mount survives Wazuh's log rotation.
+- Every alert is checked against the GridPulse IOC cache (reloaded when its mtime changes); alerts trigger a webhook if `rule.level >= 12` **or** the alert matches a GridPulse indicator, whichever comes first.
+- On an IP-type GridPulse match, the source IP is additionally routed to `core.response.WazuhResponseManager` for SOAR blocking (subject to the guardrails below).
 - Triggers `Dispatcher.send_webhook` immediately upon detection.
 
 ---
 
 ## 8. SOAR Action Execution
 
-- **Modes:** `AUDIT` (Log actions only) or `ENFORCE` (Execute via API).
-- **Supported Actions:** `BLOCK_IP` (firewall-drop), `ISOLATE_HOST`.
-- **Logic:** `main.py` regex-parses `<action>` tags from the AI report and calls `core.response.WazuhResponseManager`.
+- **Modes:** `AUDIT` (log actions only) or `ENFORCE` (execute via the Wazuh Active Response API).
+- **Supported Actions:** `BLOCK_IP` (`!firewall-drop` — the `!` prefix runs the script directly from `active-response/bin/`, requiring no `<active-response>` block on the manager), `ISOLATE_HOST` (gated behind `SOAR_ALLOW_ISOLATE=true`; currently reports failure honestly as it is not yet implemented).
+- **Triggers:** `main.py` parses the `AUTOMATED ACTIONS JSON` block from the AI report (confidence >= 8), and the real-time monitor triggers `BLOCK_IP` directly on GridPulse IP matches.
+- **Guardrails (apply in both modes):** private/loopback/reserved/invalid targets and any IP in `SOAR_PROTECTED_IPS` are refused; executed actions are capped at `SOAR_MAX_ACTIONS_PER_HOUR` (default 5); the Wazuh API's token is refreshed automatically on expiry.
+- **Honest reporting:** the Wazuh API returns HTTP 200 even when a command reaches zero agents (e.g. an invalid or disconnected agent ID) — `execute_action` checks `total_affected_items` and only reports success when the command actually dispatched.
