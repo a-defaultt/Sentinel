@@ -152,12 +152,15 @@ class WazuhResponseManager:
         """
         try:
             url = f"{self.base_url}/active-response?agents_list={agent_id}"
-            # Command must match an <active-response> command on the manager;
-            # override via WAZUH_AR_COMMAND (prefix with '!' to run a script
-            # by name on Wazuh >= 4.2). firewall-drop reads the target from
-            # alert.data.srcip.
+            # The '!' prefix runs the script by name from active-response/bin/
+            # directly, without needing a matching <command>/<active-response>
+            # block on the manager (verified against Wazuh 4.14: the bang form
+            # dispatches, the bare name returns 0 affected). firewall-drop
+            # reads the target IP from alert.data.srcip. Override via
+            # WAZUH_AR_COMMAND. Do NOT add a 'custom' field — the 4.14 API
+            # rejects it as an invalid field.
             payload = {
-                "command": os.getenv("WAZUH_AR_COMMAND", "firewall-drop"),
+                "command": os.getenv("WAZUH_AR_COMMAND", "!firewall-drop"),
                 "arguments": [ip],
                 "alert": {"data": {"srcip": ip}}
             }
@@ -166,7 +169,19 @@ class WazuhResponseManager:
                 logger.error("BLOCK_IP aborted: could not authenticate with Wazuh API.")
                 return False
             response.raise_for_status()
-            logger.info(f"Successfully triggered BLOCK_IP for {ip} on agent {agent_id}")
+            # Wazuh returns HTTP 200 even when the command reaches zero agents
+            # (e.g. targeting the manager, or a disconnected/invalid agent), so
+            # a 2xx alone is not proof of a block. Require affected >= 1.
+            body = response.json().get("data", {})
+            affected = body.get("total_affected_items", 0)
+            failed = body.get("total_failed_items", 0)
+            if affected < 1 or failed:
+                logger.error(
+                    f"BLOCK_IP for {ip} on agent {agent_id} did NOT dispatch "
+                    f"(affected={affected}, failed={failed}): {body.get('failed_items') or response.json().get('message')}"
+                )
+                return False
+            logger.info(f"Successfully triggered BLOCK_IP for {ip} on agent {agent_id} (affected={affected})")
             return True
         except Exception as e:
             logger.error(f"Failed to trigger BLOCK_IP: {e}")
